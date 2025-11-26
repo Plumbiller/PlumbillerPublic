@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "id": "plumbiller-public-addon",
+  "version": "${version}",
+  "name": "Plumbiller Public Addon",
+  "description": "Public Meteor addon built by Plumbiller.",
+  "authors": [
+    "Plumbiller"
+  ],
+  "contact": {
+    "sources": "https://github.com/Plumbiller/public-addon"
+  },
+  "icon": "assets/plumbiller/icon.png",
+  "environment": "client",
+  "entrypoints": {
+    "meteor": [
+      "com.Plumbiller.publicaddon.Main"
+    ]
+  },
+  "mixins": [
+    "plumbiller.mixins.json"
+  ],
+  "custom": {
+    "meteor-client:color": "225,25,25",
+    "modmenu": {
+      "parent": {
+        "id": "meteor-client"
+      }
+    }
+  },
+  "depends": {
+    "java": ">=21",
+    "minecraft": ["${mc_version}"],
+    "meteor-client": "*"
+  }
+}

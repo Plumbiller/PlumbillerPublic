@@ -1,0 +1,9 @@
+{
+  "required": false,
+  "package": "com.Plumbiller.publicaddon.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "client": [],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
