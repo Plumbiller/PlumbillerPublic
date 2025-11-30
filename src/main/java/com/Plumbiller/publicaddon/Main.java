@@ -1,9 +1,13 @@
 package com.Plumbiller.publicaddon;
 
+import com.Plumbiller.publicaddon.commands.restrictedarea;
 import com.Plumbiller.publicaddon.modules.AutoRename;
+import com.Plumbiller.publicaddon.util.FileManager;
+import com.Plumbiller.publicaddon.util.RestrictedAreaManager;
 import com.mojang.logging.LogUtils;
 import meteordevelopment.meteorclient.addons.GithubRepo;
 import meteordevelopment.meteorclient.addons.MeteorAddon;
+import meteordevelopment.meteorclient.commands.Commands;
 import meteordevelopment.meteorclient.systems.hud.HudGroup;
 import meteordevelopment.meteorclient.systems.modules.Category;
 import meteordevelopment.meteorclient.systems.modules.Modules;
@@ -18,10 +22,12 @@ public class Main extends MeteorAddon {
     public void onInitialize() {
         LOG.info("Initializing PlumbillerPublic addon");
 
-        // Modules
+        FileManager.initialize();
+        RestrictedAreaManager.load();
+
         Modules.get().add(new AutoRename());
 
-
+        Commands.add(new restrictedarea());
     }
 
     @Override
