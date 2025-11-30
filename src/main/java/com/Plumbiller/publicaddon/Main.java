@@ -2,6 +2,7 @@ package com.Plumbiller.publicaddon;
 
 import com.Plumbiller.publicaddon.commands.restrictedarea;
 import com.Plumbiller.publicaddon.modules.AutoRename;
+import com.Plumbiller.publicaddon.modules.RestrictedAreas;
 import com.Plumbiller.publicaddon.util.FileManager;
 import com.Plumbiller.publicaddon.util.RestrictedAreaManager;
 import com.mojang.logging.LogUtils;
@@ -26,6 +27,7 @@ public class Main extends MeteorAddon {
         RestrictedAreaManager.load();
 
         Modules.get().add(new AutoRename());
+        Modules.get().add(new RestrictedAreas());
 
         Commands.add(new restrictedarea());
     }
