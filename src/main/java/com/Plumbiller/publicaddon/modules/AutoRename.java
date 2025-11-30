@@ -3,11 +3,7 @@ package com.Plumbiller.publicaddon.modules;
 import com.Plumbiller.publicaddon.Main;
 import meteordevelopment.meteorclient.events.game.OpenScreenEvent;
 import meteordevelopment.meteorclient.events.world.TickEvent;
-import meteordevelopment.meteorclient.settings.BoolSetting;
-import meteordevelopment.meteorclient.settings.ItemListSetting;
-import meteordevelopment.meteorclient.settings.Setting;
-import meteordevelopment.meteorclient.settings.SettingGroup;
-import meteordevelopment.meteorclient.settings.StringSetting;
+import meteordevelopment.meteorclient.settings.*;
 import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.utils.Utils;
 import meteordevelopment.orbit.EventHandler;
@@ -21,6 +17,8 @@ import net.minecraft.screen.slot.SlotActionType;
 import java.util.List;
 
 public class AutoRename extends Module {
+    private static final int ANVIL_INPUT_SLOT = 0;
+    private static final int ANVIL_OUTPUT_SLOT = 2;
     private static final int MAIN_INVENTORY_START = 3;
     private static final int HOTBAR_START = 30;
     private static final int HOTBAR_SIZE = 9;
@@ -80,12 +78,27 @@ public class AutoRename extends Module {
         .build()
     );
 
+    private final Setting<Integer> delay = sgGeneral.add(new IntSetting.Builder()
+        .name("delay")
+        .description("The delay in ticks between actions.")
+        .defaultValue(2)
+        .min(0)
+        .sliderRange(0, 20)
+        .build()
+    );
+
     private Stage stage = Stage.IDLE;
     private int currentSlot = -1;
-    private int waitTicks;
+    private int waitTicks = 0;
+    private int delayTicks = 0;
 
     public AutoRename() {
-        super(Main.CATEGORY, "auto-rename", "Renames selected items automatically while an anvil is open.");
+        super(Main.CATEGORY, "auto-rename", "Automatically renames items in an anvil.");
+    }
+
+    @Override
+    public void onActivate() {
+        resetState();
     }
 
     @Override
@@ -94,88 +107,95 @@ public class AutoRename extends Module {
     }
 
     @EventHandler
-    private void onScreenChange(OpenScreenEvent event) {
-        if (!(event.screen instanceof AnvilScreen)) resetState();
+    public void onScreenChange(OpenScreenEvent event) {
+        if (!(event.screen instanceof AnvilScreen)) {
+            resetState();
+        }
     }
 
     @EventHandler
-    private void onTick(TickEvent.Post event) {
-        if (!Utils.canUpdate() || mc.player == null || mc.interactionManager == null) return;
+    public void onTick(TickEvent.Post event) {
+        if (!Utils.canUpdate() || mc.player == null || mc.interactionManager == null || !(mc.player.currentScreenHandler instanceof AnvilScreenHandler handler)) {
+            resetState();
+            return;
+        }
+
         if (targets.get().isEmpty()) {
             resetState();
             return;
         }
 
-        if (!(mc.player.currentScreenHandler instanceof AnvilScreenHandler handler)) {
-            resetState();
+        if (delayTicks > 0) {
+            delayTicks--;
             return;
         }
 
         switch (stage) {
             case IDLE -> tryStartRename(handler);
+            case WAITING_FOR_ITEM_IN_SLOT_0 -> waitForItemInSlot0(handler);
             case WAITING_OUTPUT -> waitForOutput(handler);
             case RETURNING -> returnRenamedItem(handler);
         }
     }
 
     private void tryStartRename(AnvilScreenHandler handler) {
-        if (!handler.getCursorStack().isEmpty()) return;
-        if (!handler.getSlot(0).getStack().isEmpty() || !handler.getSlot(2).getStack().isEmpty()) return;
-
-        int slot = findNextCandidate();
-        if (slot == -1) return;
-
-        ItemStack stack = mc.player.getInventory().getStack(slot);
-        String name = buildTargetName(stack);
-        if (name.isBlank()) return;
-        if (stack.getName().getString().equals(name)) return;
-
-        if (!moveToInput(handler, slot)) {
-            resetState();
+        if (!handler.getCursorStack().isEmpty() || handler.getSlot(ANVIL_INPUT_SLOT).hasStack() || handler.getSlot(ANVIL_OUTPUT_SLOT).hasStack()) {
             return;
         }
 
-        sendRenamePacket(name);
-        stage = Stage.WAITING_OUTPUT;
-        currentSlot = slot;
-        waitTicks = 0;
+        int slot = findItemToRename();
+        if (slot == -1) {
+            return;
+        }
+
+        if (moveToInput(handler, slot)) {
+            stage = Stage.WAITING_FOR_ITEM_IN_SLOT_0;
+            currentSlot = slot;
+            waitTicks = 0;
+        } else {
+            resetState();
+        }
+    }
+
+    private void waitForItemInSlot0(AnvilScreenHandler handler) {
+        waitTicks++;
+        if (handler.getSlot(ANVIL_INPUT_SLOT).hasStack()) {
+            ItemStack stack = handler.getSlot(ANVIL_INPUT_SLOT).getStack();
+            String name = buildTargetName(stack);
+            String currentName = stack.getName().getString();
+
+            if (currentName.equals(name) || alreadyHasCorrectName(currentName)) {
+                moveInputBack(handler);
+                resetState();
+                return;
+            }
+            sendRenamePacket(name);
+            stage = Stage.WAITING_OUTPUT;
+            waitTicks = 0;
+        } else if (waitTicks > MAX_WAIT_TICKS) {
+            resetState();
+        }
     }
 
     private void waitForOutput(AnvilScreenHandler handler) {
         waitTicks++;
-        if (handler.getSlot(2).hasStack()) {
+        if (handler.getSlot(ANVIL_OUTPUT_SLOT).hasStack()) {
             stage = Stage.RETURNING;
-            return;
-        }
-
-        if (waitTicks > MAX_WAIT_TICKS || !handler.getSlot(0).hasStack()) {
+            delayTicks = delay.get();
+        } else if (waitTicks > MAX_WAIT_TICKS || !handler.getSlot(ANVIL_INPUT_SLOT).hasStack()) {
             moveInputBack(handler);
             resetState();
         }
     }
 
     private void returnRenamedItem(AnvilScreenHandler handler) {
-        if (!handler.getSlot(2).hasStack()) {
-            moveInputBack(handler);
-            resetState();
-            return;
-        }
-
+        click(handler, ANVIL_OUTPUT_SLOT);
         int handlerSlot = toHandlerSlot(currentSlot);
-        click(handler, 2);
-        click(handler, handlerSlot);
-        resetState();
-    }
-
-    private void moveInputBack(AnvilScreenHandler handler) {
-        if (currentSlot < 0) return;
-
-        int handlerSlot = toHandlerSlot(currentSlot);
-        if (handlerSlot == -1) return;
-        if (handler.getSlot(0).hasStack()) {
-            click(handler, 0);
+        if (handlerSlot != -1) {
             click(handler, handlerSlot);
         }
+        delayTicks = delay.get();
+        resetState();
     }
 
     private boolean moveToInput(AnvilScreenHandler handler, int invSlot) {
@@ -184,11 +204,25 @@ public class AutoRename extends Module {
         if (handlerSlot == -1) return false;
 
         click(handler, handlerSlot);
-        click(handler, 0);
-        return handler.getSlot(0).hasStack();
+        click(handler, ANVIL_INPUT_SLOT);
+        delayTicks = delay.get();
+        return true;
+    }
+
+    private void moveInputBack(AnvilScreenHandler handler) {
+        if (currentSlot == -1) return;
+        int handlerSlot = toHandlerSlot(currentSlot);
+        if (handlerSlot == -1) return;
+
+        if (handler.getSlot(ANVIL_INPUT_SLOT).hasStack()) {
+            click(handler, ANVIL_INPUT_SLOT);
+            click(handler, handlerSlot);
+        }
+        delayTicks = delay.get();
     }
 
     private void click(AnvilScreenHandler handler, int slotId) {
+        if (mc.interactionManager == null || mc.player == null) return;
         mc.interactionManager.clickSlot(handler.syncId, slotId, 0, SlotActionType.PICKUP, mc.player);
     }
 
@@ -197,32 +231,37 @@ public class AutoRename extends Module {
         mc.player.networkHandler.sendPacket(new RenameItemC2SPacket(name));
     }
 
-    private int findNextCandidate() {
+    private int findItemToRename() {
         if (mc.player == null) return -1;
         for (int i = 0; i < mc.player.getInventory().size(); i++) {
             ItemStack stack = mc.player.getInventory().getStack(i);
-            if (stack.isEmpty()) continue;
-            if (!targets.get().contains(stack.getItem())) continue;
+            if (stack.isEmpty() || !targets.get().contains(stack.getItem())) continue;
+
             String name = buildTargetName(stack);
-            if (name.isBlank()) continue;
-            if (!stack.getName().getString().equals(name)) return i;
+            String currentName = stack.getName().getString();
+            if (currentName.equals(name) || alreadyHasCorrectName(currentName)) continue;
+
+            return i;
         }
         return -1;
     }
 
+    private boolean alreadyHasCorrectName(String currentName) {
+        boolean hasPrefix = !usePrefix.get() || currentName.startsWith(prefixText.get());
+        boolean hasSuffix = !useSuffix.get() || currentName.endsWith(suffixText.get());
+        return hasPrefix && hasSuffix;
+    }
+
     private String buildTargetName(ItemStack stack) {
-        String base = keepOriginal.get() ? getDefaultName(stack) : replacementText.get();
-        if (base.isBlank()) return "";
+        String base = keepOriginal.get() ? stack.getName().getString() : replacementText.get();
 
         StringBuilder builder = new StringBuilder();
         if (usePrefix.get()) builder.append(prefixText.get());
         builder.append(base);
         if (useSuffix.get()) builder.append(suffixText.get());
-        return builder.toString();
-    }
 
-    private String getDefaultName(ItemStack stack) {
-        return stack.getItem().getName(stack).getString();
+        String finalName = builder.toString();
+        return finalName.length() > 50 ? finalName.substring(0, 50) : finalName;
     }
 
     private int toHandlerSlot(int invSlot) {
@@ -238,11 +277,14 @@ public class AutoRename extends Module {
         stage = Stage.IDLE;
         currentSlot = -1;
         waitTicks = 0;
+        delayTicks = 0;
     }
 
     private enum Stage {
         IDLE,
+        WAITING_FOR_ITEM_IN_SLOT_0,
         WAITING_OUTPUT,
         RETURNING
     }
 }
+
