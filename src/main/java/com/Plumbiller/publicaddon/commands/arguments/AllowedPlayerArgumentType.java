@@ -70,4 +70,3 @@ public class AllowedPlayerArgumentType implements ArgumentType<String> {
         return null;
     }
 }
-

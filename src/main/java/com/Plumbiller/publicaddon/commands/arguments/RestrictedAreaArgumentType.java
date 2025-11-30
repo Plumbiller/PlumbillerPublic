@@ -65,4 +65,3 @@ public class RestrictedAreaArgumentType implements ArgumentType<String> {
         return null;
     }
 }
-

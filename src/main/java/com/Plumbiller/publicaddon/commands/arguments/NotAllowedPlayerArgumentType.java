@@ -89,4 +89,3 @@ public class NotAllowedPlayerArgumentType implements ArgumentType<PlayerListEntr
         return null;
     }
 }
-
