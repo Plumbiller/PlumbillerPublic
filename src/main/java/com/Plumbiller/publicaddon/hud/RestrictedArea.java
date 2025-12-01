@@ -30,7 +30,7 @@ public class RestrictedArea extends HudElement {
     public void render(HudRenderer renderer) {
         com.Plumbiller.publicaddon.modules.RestrictedAreas module = Modules.get().get(com.Plumbiller.publicaddon.modules.RestrictedAreas.class);
 
-        if (module == null || !module.isActive() || mc.player == null || mc.world == null) {
+        if (module == null || !module.shouldShowHud() || mc.player == null || mc.world == null) {
             return;
         }
 
@@ -82,15 +82,17 @@ public class RestrictedArea extends HudElement {
         int allowedPlayersCount = currentArea.getAllowedPlayers().size();
         String countText = " (" + allowedPlayersCount + ")";
 
-        double scale = 1;
+        double scale = module.getHudScale();
+        double opacity = module.getHudOpacity();
         boolean useCustomFont = false;
 
-        double nameWidth = renderer.textWidth(areaName, useCustomFont) * scale;
-        double countWidth = renderer.textWidth(countText, useCustomFont) * scale;
+        double nameWidth = renderer.textWidth(areaName, useCustomFont, scale);
+        double countWidth = renderer.textWidth(countText, useCustomFont, scale);
         double totalWidth = nameWidth + countWidth;
-        double textHeight = renderer.textHeight(useCustomFont) * scale;
+        double textHeight = renderer.textHeight(useCustomFont, scale);
 
-        renderer.quad(x, y, totalWidth, textHeight, new Color(0, 0, 0, 40));
+        int alpha = (int) (opacity * 255);
+        renderer.quad(x, y, totalWidth, textHeight, new Color(0, 0, 0, alpha));
 
         renderer.text(areaName, x, y, new Color(255, 215, 0), useCustomFont, scale);
         renderer.text(countText, x + nameWidth, y, new Color(0, 255, 255), useCustomFont, scale);
