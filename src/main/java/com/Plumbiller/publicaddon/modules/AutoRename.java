@@ -14,6 +14,8 @@ import net.minecraft.network.packet.c2s.play.RenameItemC2SPacket;
 import net.minecraft.screen.AnvilScreenHandler;
 import net.minecraft.screen.slot.SlotActionType;
 
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.List;
 
 public class AutoRename extends Module {
@@ -87,8 +89,11 @@ public class AutoRename extends Module {
         .build()
     );
 
+    // Queue to store items that need renaming (slot index and target name)
+    private final Deque<RenameTask> renameQueue = new ArrayDeque<>();
+    private boolean scanned = false;
     private Stage stage = Stage.IDLE;
-    private int currentSlot = -1;
+    private RenameTask currentTask = null;
     private int waitTicks = 0;
     private int delayTicks = 0;
 
@@ -108,8 +113,32 @@ public class AutoRename extends Module {
 
     @EventHandler
     public void onScreenChange(OpenScreenEvent event) {
-        if (!(event.screen instanceof AnvilScreen)) {
+        if (event.screen instanceof AnvilScreen) {
+            // Anvil opened - scan inventory once
+            scanInventoryForRenames();
+        } else {
+            // Anvil closed - reset everything
             resetState();
+        }
+    }
+
+    private void scanInventoryForRenames() {
+        renameQueue.clear();
+        scanned = true;
+
+        if (mc.player == null || targets.get().isEmpty()) return;
+
+        for (int i = 0; i < mc.player.getInventory().size(); i++) {
+            ItemStack stack = mc.player.getInventory().getStack(i);
+            if (stack.isEmpty() || !targets.get().contains(stack.getItem())) continue;
+
+            String targetName = buildTargetName(stack);
+            String currentName = stack.getName().getString();
+
+            // Check if item needs renaming
+            if (!currentName.equals(targetName) && !alreadyHasCorrectName(currentName, targetName)) {
+                renameQueue.add(new RenameTask(i, targetName));
+            }
         }
     }
 
@@ -120,8 +149,13 @@ public class AutoRename extends Module {
             return;
         }
 
-        if (targets.get().isEmpty()) {
-            resetState();
+        // If not scanned yet (module was enabled while anvil was already open)
+        if (!scanned) {
+            scanInventoryForRenames();
+        }
+
+        // No items to rename
+        if (renameQueue.isEmpty() && stage == Stage.IDLE) {
             return;
         }
 
@@ -131,49 +165,42 @@ public class AutoRename extends Module {
         }
 
         switch (stage) {
-            case IDLE -> tryStartRename(handler);
+            case IDLE -> tryStartNextRename(handler);
             case WAITING_FOR_ITEM_IN_SLOT_0 -> waitForItemInSlot0(handler);
             case WAITING_OUTPUT -> waitForOutput(handler);
             case RETURNING -> returnRenamedItem(handler);
         }
     }
 
-    private void tryStartRename(AnvilScreenHandler handler) {
+    private void tryStartNextRename(AnvilScreenHandler handler) {
         if (!handler.getCursorStack().isEmpty() || handler.getSlot(ANVIL_INPUT_SLOT).hasStack() || handler.getSlot(ANVIL_OUTPUT_SLOT).hasStack()) {
             return;
         }
 
-        int slot = findItemToRename();
-        if (slot == -1) {
+        // Get next item from queue
+        currentTask = renameQueue.poll();
+        if (currentTask == null) {
             return;
         }
 
-        if (moveToInput(handler, slot)) {
+        if (moveToInput(handler, currentTask.slot)) {
             stage = Stage.WAITING_FOR_ITEM_IN_SLOT_0;
-            currentSlot = slot;
             waitTicks = 0;
         } else {
-            resetState();
+            currentTask = null;
         }
     }
 
     private void waitForItemInSlot0(AnvilScreenHandler handler) {
         waitTicks++;
         if (handler.getSlot(ANVIL_INPUT_SLOT).hasStack()) {
-            ItemStack stack = handler.getSlot(ANVIL_INPUT_SLOT).getStack();
-            String name = buildTargetName(stack);
-            String currentName = stack.getName().getString();
-
-            if (currentName.equals(name) || alreadyHasCorrectName(currentName)) {
-                moveInputBack(handler);
-                resetState();
-                return;
-            }
-            sendRenamePacket(name);
+            // Send rename packet with pre-calculated target name
+            sendRenamePacket(currentTask.targetName);
             stage = Stage.WAITING_OUTPUT;
             waitTicks = 0;
         } else if (waitTicks > MAX_WAIT_TICKS) {
-            resetState();
+            currentTask = null;
+            stage = Stage.IDLE;
         }
     }
 
@@ -184,18 +211,22 @@ public class AutoRename extends Module {
             delayTicks = delay.get();
         } else if (waitTicks > MAX_WAIT_TICKS || !handler.getSlot(ANVIL_INPUT_SLOT).hasStack()) {
             moveInputBack(handler);
-            resetState();
+            currentTask = null;
+            stage = Stage.IDLE;
         }
     }
 
     private void returnRenamedItem(AnvilScreenHandler handler) {
         click(handler, ANVIL_OUTPUT_SLOT);
-        int handlerSlot = toHandlerSlot(currentSlot);
-        if (handlerSlot != -1) {
-            click(handler, handlerSlot);
+        if (currentTask != null) {
+            int handlerSlot = toHandlerSlot(currentTask.slot);
+            if (handlerSlot != -1) {
+                click(handler, handlerSlot);
+            }
         }
         delayTicks = delay.get();
-        resetState();
+        currentTask = null;
+        stage = Stage.IDLE;
     }
 
     private boolean moveToInput(AnvilScreenHandler handler, int invSlot) {
@@ -210,8 +241,8 @@ public class AutoRename extends Module {
     }
 
     private void moveInputBack(AnvilScreenHandler handler) {
-        if (currentSlot == -1) return;
-        int handlerSlot = toHandlerSlot(currentSlot);
+        if (currentTask == null) return;
+        int handlerSlot = toHandlerSlot(currentTask.slot);
         if (handlerSlot == -1) return;
 
         if (handler.getSlot(ANVIL_INPUT_SLOT).hasStack()) {
@@ -231,22 +262,12 @@ public class AutoRename extends Module {
         mc.player.networkHandler.sendPacket(new RenameItemC2SPacket(name));
     }
 
-    private int findItemToRename() {
-        if (mc.player == null) return -1;
-        for (int i = 0; i < mc.player.getInventory().size(); i++) {
-            ItemStack stack = mc.player.getInventory().getStack(i);
-            if (stack.isEmpty() || !targets.get().contains(stack.getItem())) continue;
-
-            String name = buildTargetName(stack);
-            String currentName = stack.getName().getString();
-            if (currentName.equals(name) || alreadyHasCorrectName(currentName)) continue;
-
-            return i;
+    private boolean alreadyHasCorrectName(String currentName, String targetName) {
+        // If no prefix and no suffix, just compare with target name directly
+        if (!usePrefix.get() && !useSuffix.get()) {
+            return currentName.equals(targetName);
         }
-        return -1;
-    }
 
-    private boolean alreadyHasCorrectName(String currentName) {
         boolean hasPrefix = !usePrefix.get() || currentName.startsWith(prefixText.get());
         boolean hasSuffix = !useSuffix.get() || currentName.endsWith(suffixText.get());
         return hasPrefix && hasSuffix;
@@ -274,11 +295,16 @@ public class AutoRename extends Module {
     }
 
     private void resetState() {
+        renameQueue.clear();
+        scanned = false;
         stage = Stage.IDLE;
-        currentSlot = -1;
+        currentTask = null;
         waitTicks = 0;
         delayTicks = 0;
     }
+
+    // Record to store rename task info
+    private record RenameTask(int slot, String targetName) {}
 
     private enum Stage {
         IDLE,
