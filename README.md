@@ -12,6 +12,6 @@ A Meteor Client addon created by Plumbiller and released publicly. It focuses on
 1.21.7
 
 ## Status
-This addon is under development. Expect. Contributions and feedback are whalecum.
+This addon is under development. Expect bugs, and please report them. Contributions and feedback are whalecum.
 
 ---
