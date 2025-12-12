@@ -2,6 +2,7 @@ package com.Plumbiller.publicaddon.commands;
 
 import com.Plumbiller.publicaddon.commands.arguments.AllowedPlayerArgumentType;
 import com.Plumbiller.publicaddon.commands.arguments.RestrictedAreaArgumentType;
+import com.Plumbiller.publicaddon.modules.RestrictedAreas;
 import com.Plumbiller.publicaddon.util.RestrictedAreaManager;
 import com.Plumbiller.publicaddon.util.RestrictedAreaManager.Coordinates;
 import com.Plumbiller.publicaddon.util.RestrictedAreaManager.RestrictedArea;
@@ -10,8 +11,12 @@ import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import meteordevelopment.meteorclient.commands.Command;
 import meteordevelopment.meteorclient.commands.arguments.PlayerListEntryArgumentType;
+import meteordevelopment.meteorclient.systems.modules.Modules;
 import net.minecraft.client.network.ServerInfo;
 import net.minecraft.command.CommandSource;
+import net.minecraft.text.Text;
+import net.minecraft.text.MutableText;
+import net.minecraft.util.Formatting;
 
 public class restrictedarea extends Command {
 
@@ -84,6 +89,12 @@ public class restrictedarea extends Command {
                         })
                 )
         );
+
+        builder.then(literal("cancel")
+                .executes(context -> {
+                    return cancelPendingAccept();
+                })
+        );
     }
 
     private int createArea(String name, int area) {
@@ -112,6 +123,11 @@ public class restrictedarea extends Command {
         if (RestrictedAreaManager.createRestrictedArea(serverIp, restrictedArea)) {
             info("§fCreated restricted area §6%s§f at §6%s§f with area size ±§6%d§f.",
                     name, coords.toString(), area);
+            // Update toggle state since a new area was created
+            RestrictedAreas restrictedAreasModule = Modules.get().get(RestrictedAreas.class);
+            if (restrictedAreasModule != null) {
+                restrictedAreasModule.validateAndFixToggleState();
+            }
         } else {
             error("Restricted area §c%s§f already exists.", name);
         }
@@ -128,8 +144,13 @@ public class restrictedarea extends Command {
 
         if (RestrictedAreaManager.deleteRestrictedArea(serverIp, name)) {
             info("§fDeleted restricted area §6%s§f.", name);
+            // Update toggle state since an area was deleted
+            RestrictedAreas restrictedAreasModule = Modules.get().get(RestrictedAreas.class);
+            if (restrictedAreasModule != null) {
+                restrictedAreasModule.validateAndFixToggleState();
+            }
         } else {
-            error("Restricted area §c%s§f does not exist.", name);
+            error("Could not delete area. Area §c%s§f may not exist.", name);
         }
 
         return SINGLE_SUCCESS;
@@ -155,6 +176,11 @@ public class restrictedarea extends Command {
 
         if (RestrictedAreaManager.allowPlayer(serverIp, areaName, playerName)) {
             info("§fAllowed §b%s§f for area §6%s§f.", playerName, areaName);
+            // Update toggle state since player permissions changed
+            RestrictedAreas restrictedAreasModule = Modules.get().get(RestrictedAreas.class);
+            if (restrictedAreasModule != null) {
+                restrictedAreasModule.validateAndFixToggleState();
+            }
         } else {
             error("Could not add player. Area §c%s§f or player §b%s§f may not exist.", areaName, playerName);
         }
@@ -171,6 +197,11 @@ public class restrictedarea extends Command {
 
         if (RestrictedAreaManager.revokePlayer(serverIp, areaName, playerName)) {
             info("§fRevoked access to §b%s§f from §6%s§f.", playerName, areaName);
+            // Update toggle state since player permissions changed
+            RestrictedAreas restrictedAreasModule = Modules.get().get(RestrictedAreas.class);
+            if (restrictedAreasModule != null) {
+                restrictedAreasModule.validateAndFixToggleState();
+            }
         } else {
             error("Could not remove player. Area or player may not exist.");
         }
@@ -236,5 +267,26 @@ public class restrictedarea extends Command {
         }
 
         return null;
+    }
+
+    private int cancelPendingAccept() {
+        RestrictedAreas module = Modules.get().get(RestrictedAreas.class);
+        if (module != null) {
+            String playerName = module.cancelPendingAccept();
+            if (playerName != null) {
+                // There was a pending request, show cancellation message with player name in aqua
+                if (mc.player != null) {
+                    MutableText message = Text.literal("");
+                    message.append(Text.literal(playerName).formatted(Formatting.AQUA));
+                    message.append(Text.literal(" request will be ignored.").formatted(Formatting.WHITE));
+                    mc.player.sendMessage(message, false);
+                }
+            } else {
+                error("No pending teleport accept to cancel.");
+            }
+        } else {
+            error("RestrictedAreas module not found.");
+        }
+        return SINGLE_SUCCESS;
     }
 }

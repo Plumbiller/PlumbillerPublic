@@ -3,6 +3,8 @@ package com.Plumbiller.publicaddon.modules;
 import com.Plumbiller.publicaddon.Main;
 import com.Plumbiller.publicaddon.util.RestrictedAreaManager;
 import meteordevelopment.meteorclient.events.render.Render3DEvent;
+import meteordevelopment.meteorclient.events.game.ReceiveMessageEvent;
+import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.renderer.ShapeMode;
 import meteordevelopment.meteorclient.settings.BoolSetting;
 import meteordevelopment.meteorclient.settings.ColorSetting;
@@ -16,18 +18,35 @@ import meteordevelopment.meteorclient.utils.render.color.SettingColor;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.client.network.ServerInfo;
 import net.minecraft.text.Text;
+import net.minecraft.text.MutableText;
 import net.minecraft.util.Formatting;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Queue;
+import java.util.LinkedList;
 
 enum RenderStyle {
     Solid,
     Pulsing
 }
 
+enum RequestState {
+    ENABLED,
+    DISABLED,
+    UNKNOWN
+}
+
 public class RestrictedAreas extends Module {
     private final Map<String, Boolean> playerInArea = new HashMap<>();
+    private final Queue<String> commandBuffer = new LinkedList<>();
+    private long lastCommandTime = 0;
+    private RequestState requestState = RequestState.UNKNOWN;
+
+    // Accept command tracking
+    private String pendingAcceptCommand = null;
+    private long pendingAcceptTime = 0;
+    private boolean cancelAccept = false;
 
     private final SettingGroup sgHud = settings.createGroup("HUD");
     private final SettingGroup sgRender = settings.createGroup("Render");
@@ -148,8 +167,28 @@ public class RestrictedAreas extends Module {
         .build()
     );
 
+    private final Setting<String> toggleMessage = sgTeleport.add(new StringSetting.Builder()
+        .name("toggle-message")
+        .description("Expected message from server when running toggle command. Use (enabled/disabled) as placeholder.")
+        .defaultValue("Requests are now (enabled/disabled)!")
+        .visible(autoToggleTp::get)
+        .build()
+    );
+
     public RestrictedAreas() {
         super(Main.CATEGORY, "restricted-areas", "Visualizes restricted areas with boxes.");
+    }
+
+    @Override
+    public void onActivate() {
+        playerInArea.clear();
+    }
+
+    @Override
+    public void onDeactivate() {
+        playerInArea.clear();
+        commandBuffer.clear();
+        requestState = RequestState.UNKNOWN;
     }
 
     public boolean shouldShowHud() {
@@ -162,6 +201,334 @@ public class RestrictedAreas extends Module {
 
     public double getHudOpacity() {
         return hudOpacity.get();
+    }
+
+    @EventHandler
+    private void onTick(TickEvent.Post event) {
+        // Handle pending accept commands with 10 second delay
+        if (pendingAcceptCommand != null && System.currentTimeMillis() - pendingAcceptTime >= 10000) {
+            if (!cancelAccept) {
+                queueCommand(pendingAcceptCommand);
+            }
+            pendingAcceptCommand = null;
+            cancelAccept = false;
+        }
+
+        // Process command buffer with 1 second delay
+        if (!autoToggleTp.get() || commandBuffer.isEmpty() || mc.player == null) return;
+
+        long currentTime = System.currentTimeMillis();
+        if (currentTime - lastCommandTime >= 1000) {
+            String command = commandBuffer.poll();
+            sendCommand(command);
+            lastCommandTime = currentTime;
+        }
+    }
+
+    @EventHandler
+    private void onReceiveMessage(ReceiveMessageEvent event) {
+        if (!autoToggleTp.get() && !autoDenyTp.get() && !autoAcceptTp.get()) return;
+
+        String message = event.getMessage().getString();
+        String toggleMsg = toggleMessage.get();
+
+        // Handle toggle command response messages
+        if (autoToggleTp.get()) {
+            // Check for enabled state
+            String enabledPattern = toggleMsg.replace("(enabled/disabled)", "enabled");
+            if (message.contains(enabledPattern)) {
+                requestState = RequestState.ENABLED;
+                validateAndFixToggleState();
+                return;
+            }
+
+            // Check for disabled state
+            String disabledPattern = toggleMsg.replace("(enabled/disabled)", "disabled");
+            if (message.contains(disabledPattern)) {
+                requestState = RequestState.DISABLED;
+                validateAndFixToggleState();
+                return;
+            }
+        }
+
+        // Handle teleport accept command detection
+        if (autoAcceptTp.get()) {
+            String acceptCmd = acceptCommand.get();
+            if (acceptCmd != null && !acceptCmd.isEmpty() && mc.player != null) {
+                // Extract the base command (e.g., "/tpy" from "/tpy Damix2131")
+                String baseCommand = acceptCmd.split(" ")[0];
+                if (baseCommand.startsWith("/")) {
+                    baseCommand = baseCommand.substring(1);
+                }
+
+                // More robust detection - look for the command as a separate word
+                // Check multiple patterns to find the command
+                String[] words = message.split(" ");
+                String playerName = null;
+
+                for (int i = 0; i < words.length; i++) {
+                    String word = words[i];
+                    // Remove formatting codes and special characters to clean the word
+                    String cleanWord = word.replaceAll("§.", "").replaceAll("[^a-zA-Z0-9_]", "");
+
+                    if (cleanWord.equals(baseCommand) && i + 1 < words.length) {
+                        // Found the command, next word should be player name
+                        playerName = words[i + 1].replaceAll("§.", "").replaceAll("[^a-zA-Z0-9_]", "");
+                        break;
+                    }
+                }
+
+                // If we found a player name after the command
+                if (playerName != null && !playerName.isEmpty()) {
+                    // Get current server and check if player is authorized
+                    String serverIp = getServerIp();
+                    if (serverIp == null) return;
+
+                    var serverData = RestrictedAreaManager.getServerData(serverIp);
+                    if (serverData.isEmpty()) return;
+
+                    // Get current area (player must be in a restricted area)
+                    String currentDimension = mc.player.getWorld().getRegistryKey().getValue().toString();
+                    for (var area : serverData.get().getRestrictedAreas()) {
+                        var coords = area.getCoordinates();
+                        if (!coords.getDimension().equals(currentDimension)) continue;
+
+                        int size = area.getArea();
+                        double minX = coords.getX() - size;
+                        double minY = coords.getY() - size;
+                        double minZ = coords.getZ() - size;
+                        double maxX = coords.getX() + size;
+                        double maxY = coords.getY() + size;
+                        double maxZ = coords.getZ() + size;
+
+                        double playerX = mc.player.getX();
+                        double playerY = mc.player.getY();
+                        double playerZ = mc.player.getZ();
+
+                        boolean isInside = playerX >= minX && playerX <= maxX &&
+                            playerY >= minY && playerY <= maxY &&
+                            playerZ >= minZ && playerZ <= maxZ;
+
+                        if (isInside && area.getAllowedPlayers().contains(playerName)) {
+                            // Player is authorized, schedule accept with 10 second delay
+                            pendingAcceptCommand = acceptCmd + " " + playerName;
+                            pendingAcceptTime = System.currentTimeMillis();
+
+                            // Send message with information
+                            MutableText playerText = Text.literal(playerName).formatted(Formatting.AQUA);
+                            MutableText areaText = Text.literal(area.getName()).formatted(Formatting.GOLD);
+
+                            MutableText messageText = Text.literal("");
+                            messageText.append(playerText);
+                            messageText.append(Text.literal(" is allowed in "));
+                            messageText.append(areaText);
+                            messageText.append(Text.literal(". Teleport request will be "));
+                            messageText.append(Text.literal("automatically accepted").formatted(Formatting.GREEN, Formatting.BOLD));
+                            messageText.append(Text.literal(" in 10 seconds. Run "));
+                            messageText.append(Text.literal(".ra cancel").formatted(Formatting.RED, Formatting.BOLD));
+                            messageText.append(Text.literal(" to cancel it."));
+
+                            mc.player.sendMessage(messageText, false);
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Handle teleport request detection and auto-deny
+        if (autoDenyTp.get()) {
+            String denyCmd = denyCommand.get();
+            if (denyCmd != null && !denyCmd.isEmpty() && mc.player != null) {
+                // Extract the base command (e.g., "/tpn" from "/tpn Damix2131")
+                String baseCommand = denyCmd.split(" ")[0];
+                if (baseCommand.startsWith("/")) {
+                    baseCommand = baseCommand.substring(1);
+                }
+
+                // More robust detection - look for the command as a separate word
+                // Check multiple patterns to find the command
+                String[] words = message.split(" ");
+                String playerName = null;
+
+                for (int i = 0; i < words.length; i++) {
+                    String word = words[i];
+                    // Remove formatting codes and special characters to clean the word
+                    String cleanWord = word.replaceAll("§.", "").replaceAll("[^a-zA-Z0-9_]", "");
+
+                    if (cleanWord.equals(baseCommand) && i + 1 < words.length) {
+                        // Found the command, next word should be player name
+                        playerName = words[i + 1].replaceAll("§.", "").replaceAll("[^a-zA-Z0-9_]", "");
+                        break;
+                    }
+                }
+
+                // If we found a player name after the command
+                if (playerName != null && !playerName.isEmpty()) {
+                    // Get current server and check if player is authorized
+                    String serverIp = getServerIp();
+                    if (serverIp == null) return;
+
+                    var serverData = RestrictedAreaManager.getServerData(serverIp);
+                    if (serverData.isEmpty()) return;
+
+                    // Get current area (player must be in a restricted area)
+                    String currentDimension = mc.player.getWorld().getRegistryKey().getValue().toString();
+                    for (var area : serverData.get().getRestrictedAreas()) {
+                        var coords = area.getCoordinates();
+                        if (!coords.getDimension().equals(currentDimension)) continue;
+
+                        int size = area.getArea();
+                        double minX = coords.getX() - size;
+                        double minY = coords.getY() - size;
+                        double minZ = coords.getZ() - size;
+                        double maxX = coords.getX() + size;
+                        double maxY = coords.getY() + size;
+                        double maxZ = coords.getZ() + size;
+
+                        double playerX = mc.player.getX();
+                        double playerY = mc.player.getY();
+                        double playerZ = mc.player.getZ();
+
+                        boolean isInside = playerX >= minX && playerX <= maxX &&
+                            playerY >= minY && playerY <= maxY &&
+                            playerZ >= minZ && playerZ <= maxZ;
+
+                        if (isInside && !area.getAllowedPlayers().contains(playerName)) {
+                            // Player is not authorized, deny the teleport
+                            String denyCommandFull = denyCmd + " " + playerName;
+                            queueCommand(denyCommandFull);
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Validates current toggle state and fixes it if needed.
+     * Rules:
+     * - If player is inside a restricted area with NO allowed players: requests MUST be DISABLED
+     * - Otherwise: requests MUST be ENABLED
+     */
+    public void validateAndFixToggleState() {
+        if (!autoToggleTp.get() || mc.player == null) return;
+
+        String serverIp = getServerIp();
+        if (serverIp == null) return;
+
+        var serverData = RestrictedAreaManager.getServerData(serverIp);
+        if (serverData.isEmpty()) return;
+
+        String currentDimension = mc.player.getWorld().getRegistryKey().getValue().toString();
+        double playerX = mc.player.getX();
+        double playerY = mc.player.getY();
+        double playerZ = mc.player.getZ();
+
+        // Check if player is in ANY restricted area with no allowed players
+        boolean isInRestrictedAreaWithNoPlayers = false;
+        for (var area : serverData.get().getRestrictedAreas()) {
+            var coords = area.getCoordinates();
+            if (!coords.getDimension().equals(currentDimension)) continue;
+
+            int size = area.getArea();
+            double minX = coords.getX() - size;
+            double minY = coords.getY() - size;
+            double minZ = coords.getZ() - size;
+            double maxX = coords.getX() + size;
+            double maxY = coords.getY() + size;
+            double maxZ = coords.getZ() + size;
+
+            boolean isInside = playerX >= minX && playerX <= maxX &&
+                playerY >= minY && playerY <= maxY &&
+                playerZ >= minZ && playerZ <= maxZ;
+
+            // Check if this area has NO allowed players
+            if (isInside && area.getAllowedPlayers().isEmpty()) {
+                isInRestrictedAreaWithNoPlayers = true;
+                break;
+            }
+        }
+
+        // Determine target state
+        RequestState targetState = isInRestrictedAreaWithNoPlayers ? RequestState.DISABLED : RequestState.ENABLED;
+
+        // If state is incorrect, queue toggle command but remove redundant ones first
+        if (requestState != targetState) {
+            // Clean up redundant toggle commands in the buffer
+            removeRedundantToggleCommands();
+
+            String command = toggleCommand.get();
+            if (command != null && !command.isEmpty()) {
+                queueCommand(command);
+            }
+        }
+    }
+
+    /**
+     * Removes redundant toggle commands from the buffer.
+     * Since toggle commands alternate state, we only need ONE toggle command pending at a time.
+     * This prevents spam when entering/exiting rapidly.
+     */
+    private void removeRedundantToggleCommands() {
+        String toggleCmd = toggleCommand.get();
+        if (toggleCmd == null || toggleCmd.isEmpty()) return;
+
+        // Extract base command without arguments
+        String baseToggleCmd = toggleCmd.split(" ")[0];
+        if (baseToggleCmd.startsWith("/")) {
+            baseToggleCmd = baseToggleCmd.substring(1);
+        }
+
+        // Count and remove all toggle commands from buffer (keep only pending operations)
+        final String finalBaseToggleCmd = baseToggleCmd;
+        int toggleCount = 0;
+        for (String cmd : commandBuffer) {
+            String baseCmdInBuffer = cmd.split(" ")[0];
+            if (baseCmdInBuffer.startsWith("/")) {
+                baseCmdInBuffer = baseCmdInBuffer.substring(1);
+            }
+            if (baseCmdInBuffer.equals(finalBaseToggleCmd)) {
+                toggleCount++;
+            }
+        }
+
+        // If there are multiple toggle commands, remove all of them
+        // We'll add exactly ONE new one in validateAndFixToggleState
+        if (toggleCount > 0) {
+            commandBuffer.removeIf(cmd -> {
+                String baseCmdInBuffer = cmd.split(" ")[0];
+                if (baseCmdInBuffer.startsWith("/")) {
+                    baseCmdInBuffer = baseCmdInBuffer.substring(1);
+                }
+                return baseCmdInBuffer.equals(finalBaseToggleCmd);
+            });
+        }
+    }
+
+    private void sendCommand(String command) {
+        if (mc.player == null) return;
+        if (command.startsWith("/")) {
+            command = command.substring(1);
+        }
+        mc.player.networkHandler.sendChatCommand(command);
+    }
+
+    private void queueCommand(String command) {
+        commandBuffer.add(command);
+    }
+
+    public String cancelPendingAccept() {
+        if (pendingAcceptCommand != null) {
+            cancelAccept = true;
+            // Extract player name from command (e.g., "/tpy PlayerName" -> "PlayerName")
+            String[] parts = pendingAcceptCommand.split(" ");
+            String playerName = parts.length > 1 ? parts[parts.length - 1] : null;
+            pendingAcceptCommand = null;
+            return playerName;
+        }
+        return null;
     }
 
     @EventHandler
@@ -208,6 +575,34 @@ public class RestrictedAreas extends Module {
                         mc.inGameHud.setTitle(Text.literal("Wilderness").formatted(Formatting.DARK_GREEN));
                     }
                 }
+
+                // Handle toggle command for areas with no authorized players
+                // Only queue if we don't already have a toggle command pending
+                if (autoToggleTp.get() && area.getAllowedPlayers().isEmpty()) {
+                    // Check if there's already a toggle command in the buffer
+                    String toggleCmd = toggleCommand.get();
+                    if (toggleCmd != null && !toggleCmd.isEmpty()) {
+                        String baseToggleCmd = toggleCmd.split(" ")[0];
+                        if (baseToggleCmd.startsWith("/")) {
+                            baseToggleCmd = baseToggleCmd.substring(1);
+                        }
+
+                        final String finalBaseToggleCmd = baseToggleCmd;
+                        boolean hasToggleInBuffer = commandBuffer.stream().anyMatch(cmd -> {
+                            String baseCmdInBuffer = cmd.split(" ")[0];
+                            if (baseCmdInBuffer.startsWith("/")) {
+                                baseCmdInBuffer = baseCmdInBuffer.substring(1);
+                            }
+                            return baseCmdInBuffer.equals(finalBaseToggleCmd);
+                        });
+
+                        // Only queue if there's no toggle already pending
+                        if (!hasToggleInBuffer) {
+                            queueCommand(toggleCmd);
+                        }
+                    }
+                }
+
                 playerInArea.put(area.getName(), isInside);
             }
 
