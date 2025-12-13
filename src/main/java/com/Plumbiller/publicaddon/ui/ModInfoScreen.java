@@ -3,6 +3,7 @@ package com.Plumbiller.publicaddon.ui;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
+import net.minecraft.client.render.RenderLayer;
 import net.minecraft.text.OrderedText;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
@@ -14,6 +15,8 @@ import org.lwjgl.glfw.GLFW;
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
@@ -111,12 +114,10 @@ public class ModInfoScreen extends Screen {
     private static ImageInfo uploadOrConvertImage(String path, BufferedImage image) {
         Identifier gpuId = null;
         try {
-            NativeImage nativeImage = new NativeImage(image.getWidth(), image.getHeight(), true);
-            for (int y = 0; y < image.getHeight(); y++) {
-                for (int x = 0; x < image.getWidth(); x++) {
-                    nativeImage.setColor(x, y, image.getRGB(x, y));
-                }
-            }
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            ImageIO.write(image, "png", baos);
+            ByteArrayInputStream bais = new ByteArrayInputStream(baos.toByteArray());
+            NativeImage nativeImage = NativeImage.read(bais);
 
             Object dynamicTex = null;
 
@@ -438,8 +439,8 @@ public class ModInfoScreen extends Screen {
                             int startX = contentLeft + (contentRight - contentLeft - displayWidth) / 2;
 
                             if (info.textureId != null) {
-                                context.drawTexturedQuad(info.textureId, startX, y, displayWidth, displayHeight, 0f, 0f,
-                                        1f, 1f);
+                                context.drawTexture(RenderLayer::getGuiTextured, info.textureId, startX, y,
+                                        0f, 0f, displayWidth, displayHeight, displayWidth, displayHeight);
                             } else if (info.pixels != null) {
                                 float scaleX = (float) displayWidth / info.width;
                                 float scaleY = (float) displayHeight / info.height;
