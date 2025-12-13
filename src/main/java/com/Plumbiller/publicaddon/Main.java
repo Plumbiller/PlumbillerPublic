@@ -41,7 +41,6 @@ public class Main extends MeteorAddon {
 
     @PostInit
     public static void postInit() {
-        // Preload ModInfoScreen content (images/markdown) to avoid lag when opening
         com.Plumbiller.publicaddon.ui.ModInfoScreen.preload();
 
         boolean hasRestrictedArea = false;

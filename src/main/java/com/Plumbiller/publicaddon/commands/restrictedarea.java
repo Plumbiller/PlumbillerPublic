@@ -37,19 +37,14 @@ public class restrictedarea extends Command {
                                     String name = context.getArgument("name", String.class);
                                     int area = context.getArgument("area", Integer.class);
                                     return createArea(name, area);
-                                })
-                        )
-                )
-        );
+                                }))));
 
         builder.then(literal("delete")
                 .then(argument("area", RestrictedAreaArgumentType.create())
                         .executes(context -> {
                             String name = RestrictedAreaArgumentType.get(context);
                             return deleteArea(name);
-                        })
-                )
-        );
+                        })));
 
         builder.then(literal("allow")
                 .then(argument("area", RestrictedAreaArgumentType.create())
@@ -58,10 +53,7 @@ public class restrictedarea extends Command {
                                     String area = RestrictedAreaArgumentType.get(context);
                                     String player = PlayerListEntryArgumentType.get(context).getProfile().getName();
                                     return allowPlayer(player, area);
-                                })
-                        )
-                )
-        );
+                                }))));
 
         builder.then(literal("revoke")
                 .then(argument("area", RestrictedAreaArgumentType.create())
@@ -70,31 +62,24 @@ public class restrictedarea extends Command {
                                     String area = RestrictedAreaArgumentType.get(context);
                                     String player = AllowedPlayerArgumentType.get(context);
                                     return revokePlayer(player, area);
-                                })
-                        )
-                )
-        );
+                                }))));
 
         builder.then(literal("list")
                 .executes(context -> {
                     return listAreas();
-                })
-        );
+                }));
 
         builder.then(literal("players")
                 .then(argument("area", RestrictedAreaArgumentType.create())
                         .executes(context -> {
                             String area = RestrictedAreaArgumentType.get(context);
                             return listPlayers(area);
-                        })
-                )
-        );
+                        })));
 
         builder.then(literal("cancel")
                 .executes(context -> {
                     return cancelPendingAccept();
-                })
-        );
+                }));
     }
 
     private int createArea(String name, int area) {
@@ -115,15 +100,13 @@ public class restrictedarea extends Command {
                 mc.player.getX(),
                 mc.player.getY(),
                 mc.player.getZ(),
-                dimension
-        );
+                dimension);
 
         RestrictedArea restrictedArea = new RestrictedArea(name, coords, area);
 
         if (RestrictedAreaManager.createRestrictedArea(serverIp, restrictedArea)) {
             info("§fCreated restricted area §6%s§f at §6%s§f with area size ±§6%d§f.",
                     name, coords.toString(), area);
-            // Update toggle state since a new area was created
             RestrictedAreas restrictedAreasModule = Modules.get().get(RestrictedAreas.class);
             if (restrictedAreasModule != null) {
                 restrictedAreasModule.validateAndFixToggleState();
@@ -144,7 +127,6 @@ public class restrictedarea extends Command {
 
         if (RestrictedAreaManager.deleteRestrictedArea(serverIp, name)) {
             info("§fDeleted restricted area §6%s§f.", name);
-            // Update toggle state since an area was deleted
             RestrictedAreas restrictedAreasModule = Modules.get().get(RestrictedAreas.class);
             if (restrictedAreasModule != null) {
                 restrictedAreasModule.validateAndFixToggleState();
@@ -176,7 +158,6 @@ public class restrictedarea extends Command {
 
         if (RestrictedAreaManager.allowPlayer(serverIp, areaName, playerName)) {
             info("§fAllowed §b%s§f for area §6%s§f.", playerName, areaName);
-            // Update toggle state since player permissions changed
             RestrictedAreas restrictedAreasModule = Modules.get().get(RestrictedAreas.class);
             if (restrictedAreasModule != null) {
                 restrictedAreasModule.validateAndFixToggleState();
@@ -197,7 +178,6 @@ public class restrictedarea extends Command {
 
         if (RestrictedAreaManager.revokePlayer(serverIp, areaName, playerName)) {
             info("§fRevoked access to §b%s§f from §6%s§f.", playerName, areaName);
-            // Update toggle state since player permissions changed
             RestrictedAreas restrictedAreasModule = Modules.get().get(RestrictedAreas.class);
             if (restrictedAreasModule != null) {
                 restrictedAreasModule.validateAndFixToggleState();
@@ -274,7 +254,6 @@ public class restrictedarea extends Command {
         if (module != null) {
             String playerName = module.cancelPendingAccept();
             if (playerName != null) {
-                // There was a pending request, show cancellation message with player name in aqua
                 if (mc.player != null) {
                     MutableText message = Text.literal("");
                     message.append(Text.literal(playerName).formatted(Formatting.AQUA));

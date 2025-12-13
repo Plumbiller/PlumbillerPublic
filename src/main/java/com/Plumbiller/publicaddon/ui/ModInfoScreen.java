@@ -8,7 +8,7 @@ import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
 import net.minecraft.util.Identifier;
 import net.minecraft.client.texture.NativeImage;
-import net.minecraft.client.texture.NativeImageBackedTexture;
+import net.minecraft.client.texture.AbstractTexture;
 import org.lwjgl.glfw.GLFW;
 
 import javax.imageio.ImageIO;
@@ -23,27 +23,23 @@ import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Method;
 
 public class ModInfoScreen extends Screen {
     private final Screen parent;
-    private int currentTab = 0; // 0=Overview, 1=Features, 2=Dependencies
+    private int currentTab = 0;
 
-    // Content Cache: Tab Index -> List of formatted lines (Static for persistence)
     private static final Map<Integer, List<FormattedLine>> contentCache = new HashMap<>();
 
-    // Image Cache: Path -> Object (BufferedImage [pending] OR ImageInfo [ready])
     private static final Map<String, Object> globalImageCache = new HashMap<>();
 
-    // RLE Rect for manual rendering
-    // x, y are relative to image top-left
     private record PixelRect(int x, int y, int width, int height, int color) {
     }
 
-    // Image Handle (wraps either a GPU Texture or CPU Pixel Data)
     private record ImageInfo(Identifier textureId, List<PixelRect> pixels, int width, int height) {
     }
 
-    // Preload images only (safe to call from Main)
     public static void preload() {
         String[] files = { "overview.md", "features.md", "dependencies.md" };
         for (String file : files) {
@@ -75,7 +71,6 @@ public class ModInfoScreen extends Screen {
         }
     }
 
-    // Helper to load/get image info
     private static ImageInfo getOrLoadImage(String path) {
         Object cached = globalImageCache.get(path);
 
@@ -94,16 +89,11 @@ public class ModInfoScreen extends Screen {
             if (original == null)
                 return null;
 
-            // Downscale by 2x (Safe compromise for size/quality)
-            // For fallback compatibility, we ensure it's not HUGE.
             int origW = original.getWidth();
             int origH = original.getHeight();
-
-            // 2x downscale standard
             int newW = Math.max(origW / 2, Math.min(50, origW));
             int newH = Math.max(origH / 2, Math.min(50, origH));
 
-            // Use AWT smooth scaling
             java.awt.Image scaled = original.getScaledInstance(newW, newH, java.awt.Image.SCALE_SMOOTH);
             BufferedImage result = new BufferedImage(newW, newH, BufferedImage.TYPE_INT_ARGB);
             java.awt.Graphics2D g = result.createGraphics();
@@ -111,59 +101,80 @@ public class ModInfoScreen extends Screen {
             g.dispose();
 
             globalImageCache.put(path, result);
-            return null; // Pending upload/conversion
+            return null;
         } catch (Exception e) {
             e.printStackTrace();
             return null;
         }
     }
 
-    // Attempt to upload to GPU, fallback to RLE pixels if failed
     private static ImageInfo uploadOrConvertImage(String path, BufferedImage image) {
-        // 1. Try GPU Upload via Reflection
         Identifier gpuId = null;
-        try (NativeImage nativeImage = new NativeImage(image.getWidth(), image.getHeight(), true)) {
+        try {
+            NativeImage nativeImage = new NativeImage(image.getWidth(), image.getHeight(), true);
             for (int y = 0; y < image.getHeight(); y++) {
                 for (int x = 0; x < image.getWidth(); x++) {
                     nativeImage.setColor(x, y, image.getRGB(x, y));
                 }
             }
 
-            net.minecraft.client.texture.AbstractTexture dynamicTex = null;
+            Object dynamicTex = null;
 
-            // Try matching constructor for NativeImageBackedTexture
+            Class<?> textureClass = null;
             try {
-                Class<?> clazz = NativeImageBackedTexture.class;
-                java.lang.reflect.Constructor<?>[] constructors = clazz.getConstructors();
-                for (java.lang.reflect.Constructor<?> c : constructors) {
+                textureClass = Class.forName("net.minecraft.client.texture.NativeImageBackedTexture");
+            } catch (ClassNotFoundException e) {
+                try {
+                    textureClass = Class.forName("net.minecraft.client.texture.DynamicTexture");
+                } catch (ClassNotFoundException ex) {
+                }
+            }
+
+            if (textureClass != null) {
+                Constructor<?> candidate = null;
+                for (Constructor<?> c : textureClass.getConstructors()) {
                     Class<?>[] types = c.getParameterTypes();
-                    if (types.length >= 1 && types[0].isAssignableFrom(NativeImage.class)) {
-                        Object[] args = new Object[types.length];
-                        args[0] = nativeImage;
-                        for (int i = 1; i < types.length; i++) {
-                            if (types[i] == boolean.class)
-                                args[i] = false;
-                        }
-                        dynamicTex = (net.minecraft.client.texture.AbstractTexture) c.newInstance(args);
+                    if (types.length == 1 && types[0].isAssignableFrom(NativeImage.class)) {
+                        candidate = c;
                         break;
                     }
                 }
-            } catch (Exception e) {
-                /* Ignore */ }
 
-            if (dynamicTex != null) {
-                // Try upload
-                try {
-                    java.lang.reflect.Method uploadMethod = dynamicTex.getClass().getMethod("upload");
-                    uploadMethod.invoke(dynamicTex);
-                } catch (Exception e) {
-                    /* Ignore */ }
+                if (candidate != null) {
+                    dynamicTex = candidate.newInstance(nativeImage);
 
-                gpuId = Identifier.of("publicaddon", "modinfo_img_" + Math.abs(path.hashCode()));
-                net.minecraft.client.MinecraftClient.getInstance().getTextureManager().registerTexture(gpuId,
-                        dynamicTex);
+                    try {
+                        Method uploadMethod = textureClass.getMethod("upload");
+                        uploadMethod.invoke(dynamicTex);
+                    } catch (Exception e) {
+                    }
+
+                    Identifier id = Identifier.of("publicaddon", "modinfo_img_" + Math.abs(path.hashCode()));
+
+                    Object textureManager = net.minecraft.client.MinecraftClient.getInstance().getTextureManager();
+                    Method registerMethod = null;
+
+                    for (Method m : textureManager.getClass().getMethods()) {
+                        if (m.getName().equals("registerTexture") || m.getName().equals("method_4616")) {
+                            Class<?>[] pts = m.getParameterTypes();
+                            if (pts.length == 2 && pts[0] == Identifier.class
+                                    && AbstractTexture.class.isAssignableFrom(pts[1])) {
+                                registerMethod = m;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (registerMethod != null) {
+                        registerMethod.invoke(textureManager, id, dynamicTex);
+                        gpuId = id;
+                        System.out.println("ModInfoScreen: GPU texture uploaded: " + id);
+                    }
+                }
             }
-        } catch (Exception e) {
+
+        } catch (Throwable e) {
+            System.out.println("ModInfoScreen: GPU upload failed, falling back to CPU.");
             e.printStackTrace();
         }
 
@@ -173,13 +184,7 @@ public class ModInfoScreen extends Screen {
             return info;
         }
 
-        // 2. FALLBACK: Optimized 2D Greedy Meshing (CPU Rendering)
-        // Consolidate Rels to reduce draw calls
         List<PixelRect> optimizedRects = optimizePixels(image);
-
-        System.out.println("ModInfoScreen: Fallback to optimized pixel rendering for " + path + " ("
-                + optimizedRects.size() + " rects)");
-
         ImageInfo info = new ImageInfo(null, optimizedRects, image.getWidth(), image.getHeight());
         globalImageCache.put(path, info);
         return info;
@@ -188,10 +193,7 @@ public class ModInfoScreen extends Screen {
     private static List<PixelRect> optimizePixels(BufferedImage image) {
         int width = image.getWidth();
         int height = image.getHeight();
-        List<PixelRect> rects = new ArrayList<>();
 
-        // Pass 1: Horizontal RLE
-        // We store this as a list of rows, where each row has a list of segments
         List<List<PixelRect>> rows = new ArrayList<>(height);
 
         for (int y = 0; y < height; y++) {
@@ -202,7 +204,7 @@ public class ModInfoScreen extends Screen {
             for (int x = 1; x < width; x++) {
                 int pixel = image.getRGB(x, y);
                 if (pixel != currentColor) {
-                    if ((currentColor >>> 24) != 0) { // If not transparent
+                    if ((currentColor >>> 24) != 0) {
                         rowSegments.add(new PixelRect(startX, y, x - startX, 1, currentColor));
                     }
                     startX = x;
@@ -215,60 +217,21 @@ public class ModInfoScreen extends Screen {
             rows.add(rowSegments);
         }
 
-        // Pass 2: Vertical Merge (Greedy)
-        // We compare current row segments with the "active" list of rectangles we are
-        // building.
-        // But since we built full rows, we can just iterate Y and try to merge with
-        // Y-1.
-        // Actually, simpler: Iterate rows. For each segment in Row Y, check if it
-        // extends a segment in Row Y-1.
-
-        // Final list structure is tricky to build in one pass if we want optimal
-        // merging.
-        // Simplified Vertical Merge:
-        // We keep a 'pending' list of rects that are "open" at the bottom.
-
-        // Let's just do a naive N^2 merge on the finished list logic, effectively.
-        // Actually, iterating Y then X aligns with the data.
-        // We will flatten the 1D RLE into a single list for now, but check previous
-        // rects.
-
-        // To keep it strictly simpler and performant (O(N)):
-        // Just add the 1D RLE rects to the final list, but check if the LAST added rect
-        // (if on y-1)
-        // has same x, width, color.
-
-        // Better: Comparison Map? Too complex.
-        // Let's stick to Horizontal RLE + Vertical adjacency check for perfectly
-        // aligned blocks.
-
         List<PixelRect> finalRects = new ArrayList<>();
-        // Helper to find merge candidate in the *previous row's added rects* is hard
-        // because indices shift.
-        // Let's just dump Horizontal RLE because it's already 50x better than pixels.
-        // To improve further:
 
         for (List<PixelRect> row : rows) {
             for (PixelRect seg : row) {
-                // Try to find a rect in 'finalRects' that ends at y = seg.y and matches x, w,
-                // color
                 boolean merged = false;
-                // Optimization: Search backwards from end of list, since we add in order.
-                // We only need to check rects that "ended" at seg.y - 1.
                 for (int i = finalRects.size() - 1; i >= 0; i--) {
                     PixelRect candidate = finalRects.get(i);
                     if (candidate.y + candidate.height == seg.y) {
                         if (candidate.x == seg.x && candidate.width == seg.width && candidate.color == seg.color) {
-                            // Merge!
                             finalRects.set(i, new PixelRect(candidate.x, candidate.y, candidate.width,
                                     candidate.height + 1, candidate.color));
                             merged = true;
                             break;
                         }
                     }
-                    // If candidate ended way before (y < seg.y - 1), we can stop searching?
-                    // No, because we might have skip lines. But here we scan Y sequentially.
-                    // So yes, if candidate.y + h < seg.y - 1, we stop.
                     if (candidate.y + candidate.height < seg.y - 1)
                         break;
                 }
@@ -287,7 +250,6 @@ public class ModInfoScreen extends Screen {
     private static final int SCROLL_SPEED = 20;
     private static final int PADDING = 20;
 
-    // Regex for markdown images: ![alt text](path)
     private static final Pattern IMAGE_PATTERN = Pattern.compile("!\\[(.*?)\\]\\((.*?)\\)");
 
     public ModInfoScreen(Screen parent) {
@@ -306,7 +268,6 @@ public class ModInfoScreen extends Screen {
         int startX = (this.width - totalWidth) / 2;
         int startY = PADDING;
 
-        // Tab Buttons
         this.addDrawableChild(ButtonWidget.builder(Text.literal("Overview"), button -> setTab(0))
                 .dimensions(startX, startY, buttonWidth, buttonHeight)
                 .build());
@@ -319,7 +280,6 @@ public class ModInfoScreen extends Screen {
                 .dimensions(startX + (buttonWidth + spacing) * 2, startY, buttonWidth, buttonHeight)
                 .build());
 
-        // Initial load
         setTab(currentTab);
     }
 
@@ -341,7 +301,7 @@ public class ModInfoScreen extends Screen {
 
     private void loadAndProcessMarkdown(int tabIndex, String path) {
         List<FormattedLine> lines = new ArrayList<>();
-        int maxWidth = this.width - (PADDING * 2) - 20; // -20 for internal padding
+        int maxWidth = this.width - (PADDING * 2) - 20;
 
         try {
             InputStream stream = getClass().getResourceAsStream(path);
@@ -368,11 +328,10 @@ public class ModInfoScreen extends Screen {
     private void processMarkdownLine(String line, List<FormattedLine> outputLines, int maxWidth) {
         line = line.trim();
         if (line.isEmpty()) {
-            outputLines.add(new FormattedLine(OrderedText.EMPTY, null, 0, 10, 5)); // Spacer
+            outputLines.add(new FormattedLine(OrderedText.EMPTY, null, 0, 10, 5));
             return;
         }
 
-        // Check for Image
         Matcher imageMatcher = IMAGE_PATTERN.matcher(line);
         if (imageMatcher.matches()) {
             String path = imageMatcher.group(2).toLowerCase(java.util.Locale.ROOT);
@@ -383,11 +342,9 @@ public class ModInfoScreen extends Screen {
                 cleanPath = cleanPath.substring(1);
             String resourcePath = "/assets/publicaddon/" + cleanPath;
 
-            // Load texture info (layout only)
             ImageInfo info = getOrLoadImage(resourcePath);
 
             if (info != null) {
-                // Improved Sizing: maximize width up to image native width
                 int displayWidth = Math.min(maxWidth > 50 ? maxWidth : 350, info.width);
                 float aspectRatio = (float) info.height / info.width;
                 int displayHeight = (int) (displayWidth * aspectRatio);
@@ -481,14 +438,9 @@ public class ModInfoScreen extends Screen {
                             int startX = contentLeft + (contentRight - contentLeft - displayWidth) / 2;
 
                             if (info.textureId != null) {
-                                // Render via GPU Texture
                                 context.drawTexturedQuad(info.textureId, startX, y, displayWidth, displayHeight, 0f, 0f,
                                         1f, 1f);
                             } else if (info.pixels != null) {
-                                // Fallback: Render via optimized Rects using context.fill (Safe & Compatible)
-                                // We use the standard DrawContext fill which is slower than batching but
-                                // our rect optimization (Horizontal+Vertical RLE) reduces the count
-                                // significantly.
                                 float scaleX = (float) displayWidth / info.width;
                                 float scaleY = (float) displayHeight / info.height;
 
@@ -498,7 +450,6 @@ public class ModInfoScreen extends Screen {
                                     int pw = (int) Math.max(1, r.width * scaleX);
                                     int ph = (int) Math.max(1, r.height * scaleY);
 
-                                    // Bounding box check to save even more calls
                                     if (py + ph < contentTop || py > contentBottom)
                                         continue;
 

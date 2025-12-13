@@ -6,6 +6,8 @@ PlumbillerPublic is a Public meteor client addon created by Plumbiller. It's a w
 
 ### Contributions
 
-Feel free to cumtribute to the project, you can do so by creating a pull request on the [GitHub repository](https://github.com/Plumbiller/PlumbillerPublic).
+Cumtributions are whalecum, you can do so by creating a pull request on 
+https://github.com/Plumbiller/PlumbillerPublic
 
-If you find any bugs or have any suggestions, please open an issue on the [GitHub repository](https://github.com/Plumbiller/PlumbillerPublic/issues).
+If you find any bugs or have any suggestions, please open an issue on
+https://github.com/Plumbiller/PlumbillerPublic/issues

@@ -4,7 +4,7 @@ plugins {
 
 base {
     archivesName = properties["archives_base_name"] as String
-    version = libs.versions.mod.version.get()
+    version = properties["mod_version"] as String
     group = properties["maven_group"] as String
 }
 
@@ -21,12 +21,10 @@ repositories {
 }
 
 dependencies {
-    // Fabric
     minecraft(libs.minecraft)
     mappings(variantOf(libs.yarn) { classifier("v2") })
     modImplementation(libs.fabric.loader)
 
-    // Meteor
     modImplementation(libs.meteor.client)
 
 
