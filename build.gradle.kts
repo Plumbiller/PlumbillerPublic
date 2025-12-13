@@ -17,6 +17,7 @@ repositories {
         name = "meteor-maven-snapshots"
         url = uri("https://maven.meteordev.org/snapshots")
     }
+    mavenCentral()
 }
 
 dependencies {
@@ -27,7 +28,11 @@ dependencies {
 
     // Meteor
     modImplementation(libs.meteor.client)
+
+
 }
+
+
 
 tasks {
     processResources {
