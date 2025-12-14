@@ -18,7 +18,7 @@ https://github.com/Plumbiller/PlumbillerPublic/issues
 * This module let the player automatically rename items in bulk using anvils.
 * You can set a prefix and/or suffix for the items, maintaining the original name or modifing it too.
 
-![Auto Rename](/docs_assets/autorename.png)
+![Auto Rename](src/main/resources/assets/publicaddon/docs_assets/autorename.png)
 
 ### Restricted Areas
 * Restricted areas are highly confurable zones that automatically manages (if you want to) the teleportation of allowed players in specific areas.
@@ -29,7 +29,7 @@ https://github.com/Plumbiller/PlumbillerPublic/issues
 * Note: I recommend using this module in case teleport requests from random players are annoying for you when you are in your homes or other private areas, and you don't want to accidentally accept a teleport request from a stranger, or if you want to automatically accept teleport requests from trusted players in a specific area.
 
 ### Restricted Areas Configuration
-![Restricted Areas](/docs_assets/restrictedareas.png)
+![Restricted Areas](src/main/resources/assets/publicaddon/docs_assets/restrictedareas.png)
 
 * As you can see in the image you can configure the HUD if you want more visual information about the area you are in, and how many players are allowed there. You can change the size, transparency or disable it.
 * You can also choose if you want to render the area or not, and what colors you want to use for the lines and border (my favourite is rainbow mode). You can also choose between solid or pulsating render mode, tho I don't personally like the pulsating mode, but whatever.
