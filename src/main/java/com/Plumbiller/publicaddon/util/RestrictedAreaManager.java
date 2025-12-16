@@ -23,7 +23,8 @@ public class RestrictedAreaManager {
         private int z;
         private String dimension;
 
-        public Coordinates() {}
+        public Coordinates() {
+        }
 
         public Coordinates(double x, double y, double z, String dimension) {
             this.x = (int) Math.floor(x);
@@ -70,10 +71,14 @@ public class RestrictedAreaManager {
         }
 
         private String getDimensionName() {
-            if (dimension == null) return "unknown";
-            if (dimension.contains("overworld")) return "Overworld";
-            if (dimension.contains("the_nether")) return "Nether";
-            if (dimension.contains("the_end")) return "End";
+            if (dimension == null)
+                return "unknown";
+            if (dimension.contains("overworld"))
+                return "Overworld";
+            if (dimension.contains("the_nether"))
+                return "Nether";
+            if (dimension.contains("the_end"))
+                return "End";
             return dimension;
         }
     }
@@ -196,7 +201,8 @@ public class RestrictedAreaManager {
     public static void load() {
         try {
             String json = FileManager.readRestrictedAreas();
-            Type listType = new TypeToken<ArrayList<ServerData>>(){}.getType();
+            Type listType = new TypeToken<ArrayList<ServerData>>() {
+            }.getType();
             List<ServerData> loaded = GSON.fromJson(json, listType);
             if (loaded != null) {
                 serverDataList = loaded;
@@ -303,5 +309,42 @@ public class RestrictedAreaManager {
             return Optional.empty();
         }
         return serverData.get().getRestrictedArea(areaName);
+    }
+
+    public static boolean renameRestrictedArea(String serverIp, String oldName, String newName) {
+        Optional<ServerData> serverData = getServerData(serverIp);
+        if (serverData.isEmpty())
+            return false;
+
+        if (serverData.get().hasRestrictedArea(newName))
+            return false;
+
+        Optional<RestrictedArea> area = serverData.get().getRestrictedArea(oldName);
+        if (area.isPresent()) {
+            area.get().setName(newName);
+            save();
+            return true;
+        }
+        return false;
+    }
+
+    public static boolean resizeRestrictedArea(String serverIp, String areaName, int newSize) {
+        Optional<RestrictedArea> area = getRestrictedArea(serverIp, areaName);
+        if (area.isPresent()) {
+            area.get().setArea(newSize);
+            save();
+            return true;
+        }
+        return false;
+    }
+
+    public static boolean repositionRestrictedArea(String serverIp, String areaName, Coordinates newCoords) {
+        Optional<RestrictedArea> area = getRestrictedArea(serverIp, areaName);
+        if (area.isPresent()) {
+            area.get().setCoordinates(newCoords);
+            save();
+            return true;
+        }
+        return false;
     }
 }

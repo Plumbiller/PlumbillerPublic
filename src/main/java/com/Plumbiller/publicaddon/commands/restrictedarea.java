@@ -1,3 +1,5 @@
+
+// restrictedarea.java
 package com.Plumbiller.publicaddon.commands;
 
 import com.Plumbiller.publicaddon.commands.arguments.AllowedPlayerArgumentType;
@@ -17,6 +19,8 @@ import net.minecraft.command.CommandSource;
 import net.minecraft.text.Text;
 import net.minecraft.text.MutableText;
 import net.minecraft.util.Formatting;
+import com.mojang.brigadier.context.CommandContext;
+import com.mojang.brigadier.exceptions.CommandSyntaxException;
 
 public class restrictedarea extends Command {
 
@@ -80,6 +84,31 @@ public class restrictedarea extends Command {
                 .executes(context -> {
                     return cancelPendingAccept();
                 }));
+
+        builder.then(literal("modify")
+                .then(literal("name")
+                        .then(argument("area", RestrictedAreaArgumentType.create())
+                                .then(argument("new_name", StringArgumentType.word())
+                                        .executes(context -> {
+                                            String area = RestrictedAreaArgumentType.get(context);
+                                            String newName = context.getArgument("new_name", String.class);
+                                            return renameArea(area, newName);
+                                        }))))
+                .then(literal("area")
+                        .then(argument("area", RestrictedAreaArgumentType.create())
+                                .then(argument("size", IntegerArgumentType.integer(1))
+                                        .executes(context -> {
+                                            String area = RestrictedAreaArgumentType.get(context);
+                                            int size = context.getArgument("size", Integer.class);
+                                            return resizeArea(area, size);
+                                        }))))
+                .then(literal("position")
+                        .then(argument("area", RestrictedAreaArgumentType.create())
+                                .then(argument("pos", StringArgumentType.greedyString())
+                                        .executes(context -> {
+                                            String area = RestrictedAreaArgumentType.get(context);
+                                            return repositionArea(context, area);
+                                        })))));
     }
 
     private int createArea(String name, int area) {
@@ -267,5 +296,95 @@ public class restrictedarea extends Command {
             error("RestrictedAreas module not found.");
         }
         return SINGLE_SUCCESS;
+    }
+
+    private int renameArea(String oldName, String newName) {
+        String serverIp = getServerIp();
+        if (serverIp == null) {
+            error("Could not determine server IP.");
+            return SINGLE_SUCCESS;
+        }
+
+        if (RestrictedAreaManager.renameRestrictedArea(serverIp, oldName, newName)) {
+            info("§frenamed restricted area §6%s§f to §6%s§f.", oldName, newName);
+            RestrictedAreas restrictedAreasModule = Modules.get().get(RestrictedAreas.class);
+            if (restrictedAreasModule != null) {
+                restrictedAreasModule.validateAndFixToggleState();
+            }
+        } else {
+            error("Could not rename restricted area §c%s§f. Name may be taken or area not found.", oldName);
+        }
+
+        return SINGLE_SUCCESS;
+    }
+
+    private int resizeArea(String name, int newSize) {
+        String serverIp = getServerIp();
+        if (serverIp == null) {
+            error("Could not determine server IP.");
+            return SINGLE_SUCCESS;
+        }
+
+        if (RestrictedAreaManager.resizeRestrictedArea(serverIp, name, newSize)) {
+            info("§fResized restricted area §6%s§f to ±§6%d§f.", name, newSize);
+            RestrictedAreas restrictedAreasModule = Modules.get().get(RestrictedAreas.class);
+            if (restrictedAreasModule != null) {
+                restrictedAreasModule.validateAndFixToggleState();
+            }
+        } else {
+            error("Could not resize restricted area §c%s§f.", name);
+        }
+
+        return SINGLE_SUCCESS;
+    }
+
+    private int repositionArea(CommandContext<CommandSource> context, String name) throws CommandSyntaxException {
+        String serverIp = getServerIp();
+        if (serverIp == null) {
+            error("Could not determine server IP.");
+            return SINGLE_SUCCESS;
+        }
+
+        String arg = context.getArgument("pos", String.class);
+        String[] parts = arg.trim().split("\\s+");
+        if (parts.length != 3) {
+            error("Invalid coordinates. Usage: <x> <y> <z> (supports ~)");
+            return SINGLE_SUCCESS;
+        }
+
+        if (mc.player == null)
+            return SINGLE_SUCCESS;
+
+        try {
+            double x = parseCoord(parts[0], mc.player.getX());
+            double y = parseCoord(parts[1], mc.player.getY());
+            double z = parseCoord(parts[2], mc.player.getZ());
+
+            String dimension = mc.player.getWorld().getRegistryKey().getValue().toString();
+            Coordinates coords = new Coordinates(x, y, z, dimension);
+
+            if (RestrictedAreaManager.repositionRestrictedArea(serverIp, name, coords)) {
+                info("§fRestricted area §6%s§f moved to §6%s§f.", name, coords.toString());
+                RestrictedAreas restrictedAreasModule = Modules.get().get(RestrictedAreas.class);
+                if (restrictedAreasModule != null) {
+                    restrictedAreasModule.validateAndFixToggleState();
+                }
+            } else {
+                error("Could not move restricted area §c%s§f.", name);
+            }
+        } catch (NumberFormatException e) {
+            error("Invalid number format.");
+        }
+
+        return SINGLE_SUCCESS;
+    }
+
+    private double parseCoord(String input, double current) {
+        if (input.startsWith("~")) {
+            if (input.length() == 1)
+                return current;
+            return current + Double.parseDouble(input.substring(1));
+        }
+        return Double.parseDouble(input);
     }
 }
