@@ -61,6 +61,11 @@ This command lists all the players that have access to a specific area. It requi
 ## .ra cancel
 If the auto accept config is enabled and the module detects a trusted player teleport request, it won't actually accept it immediately, instead it will wait for 10 seconds before accepting it. If you change your mind and you decide you don't want to accept the request from this trusted player, you always have this 10 seconds window to type .ra cancel and it won't be accepted. You can't disable this. Auto accept will always take 10 seconds to execute, just in case.
 
+## .ra modify
+* .ra modify name (area name) (new name)
+* .ra modify area (area name) (new size)
+* .ra modify position (area name) < ~ ~ ~ | x y z >
+
 # Dependencies
 
 * **Minecraft 1.21.7**
