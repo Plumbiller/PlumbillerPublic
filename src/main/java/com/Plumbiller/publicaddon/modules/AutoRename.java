@@ -29,67 +29,58 @@ public class AutoRename extends Module {
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
 
     private final Setting<List<Item>> targets = sgGeneral.add(new ItemListSetting.Builder()
-        .name("items")
-        .description("Items that should be renamed when an anvil is open.")
-        .defaultValue(List.of())
-        .build()
-    );
+            .name("items")
+            .description("Items that should be renamed when an anvil is open.")
+            .defaultValue(List.of())
+            .build());
 
     private final Setting<Boolean> usePrefix = sgGeneral.add(new BoolSetting.Builder()
-        .name("use-prefix")
-        .description("Adds a prefix before the base name.")
-        .defaultValue(false)
-        .build()
-    );
+            .name("use-prefix")
+            .description("Adds a prefix before the base name.")
+            .defaultValue(false)
+            .build());
 
     private final Setting<String> prefixText = sgGeneral.add(new StringSetting.Builder()
-        .name("prefix-text")
-        .description("Text used as prefix when enabled.")
-        .defaultValue("")
-        .visible(usePrefix::get)
-        .build()
-    );
+            .name("prefix-text")
+            .description("Text used as prefix when enabled.")
+            .defaultValue("")
+            .visible(usePrefix::get)
+            .build());
 
     private final Setting<Boolean> useSuffix = sgGeneral.add(new BoolSetting.Builder()
-        .name("use-suffix")
-        .description("Adds a suffix after the base name.")
-        .defaultValue(false)
-        .build()
-    );
+            .name("use-suffix")
+            .description("Adds a suffix after the base name.")
+            .defaultValue(false)
+            .build());
 
     private final Setting<String> suffixText = sgGeneral.add(new StringSetting.Builder()
-        .name("suffix-text")
-        .description("Text used as suffix when enabled.")
-        .defaultValue("")
-        .visible(useSuffix::get)
-        .build()
-    );
+            .name("suffix-text")
+            .description("Text used as suffix when enabled.")
+            .defaultValue("")
+            .visible(useSuffix::get)
+            .build());
 
     private final Setting<Boolean> keepOriginal = sgGeneral.add(new BoolSetting.Builder()
-        .name("keep-original-name")
-        .description("Keeps the default item name between the prefix and suffix.")
-        .defaultValue(true)
-        .build()
-    );
+            .name("keep-original-name")
+            .description("Keeps the default item name between the prefix and suffix.")
+            .defaultValue(true)
+            .build());
 
     private final Setting<String> replacementText = sgGeneral.add(new StringSetting.Builder()
-        .name("replacement-text")
-        .description("Base name to use when not keeping the original name.")
-        .defaultValue("")
-        .visible(() -> !keepOriginal.get())
-        .build()
-    );
+            .name("replacement-text")
+            .description("Base name to use when not keeping the original name.")
+            .defaultValue("")
+            .visible(() -> !keepOriginal.get())
+            .build());
 
     private final Setting<Integer> delay = sgGeneral.add(new IntSetting.Builder()
-        .name("delay")
-        .description("The delay in ticks between actions.")
-        .defaultValue(2)
-        .min(0)
-        .sliderRange(0, 20)
-        .build()
-    );
+            .name("delay")
+            .description("The delay in ticks between actions.")
+            .defaultValue(2)
+            .min(0)
+            .sliderRange(0, 20)
+            .build());
 
-    // Queue to store items that need renaming (slot index and target name)
     private final Deque<RenameTask> renameQueue = new ArrayDeque<>();
     private boolean scanned = false;
     private Stage stage = Stage.IDLE;
@@ -114,10 +105,8 @@ public class AutoRename extends Module {
     @EventHandler
     public void onScreenChange(OpenScreenEvent event) {
         if (event.screen instanceof AnvilScreen) {
-            // Anvil opened - scan inventory once
             scanInventoryForRenames();
         } else {
-            // Anvil closed - reset everything
             resetState();
         }
     }
@@ -126,16 +115,17 @@ public class AutoRename extends Module {
         renameQueue.clear();
         scanned = true;
 
-        if (mc.player == null || targets.get().isEmpty()) return;
+        if (mc.player == null || targets.get().isEmpty())
+            return;
 
         for (int i = 0; i < mc.player.getInventory().size(); i++) {
             ItemStack stack = mc.player.getInventory().getStack(i);
-            if (stack.isEmpty() || !targets.get().contains(stack.getItem())) continue;
+            if (stack.isEmpty() || !targets.get().contains(stack.getItem()))
+                continue;
 
             String targetName = buildTargetName(stack);
             String currentName = stack.getName().getString();
 
-            // Check if item needs renaming
             if (!currentName.equals(targetName) && !alreadyHasCorrectName(currentName, targetName)) {
                 renameQueue.add(new RenameTask(i, targetName));
             }
@@ -144,17 +134,16 @@ public class AutoRename extends Module {
 
     @EventHandler
     public void onTick(TickEvent.Post event) {
-        if (!Utils.canUpdate() || mc.player == null || mc.interactionManager == null || !(mc.player.currentScreenHandler instanceof AnvilScreenHandler handler)) {
+        if (!Utils.canUpdate() || mc.player == null || mc.interactionManager == null
+                || !(mc.player.currentScreenHandler instanceof AnvilScreenHandler handler)) {
             resetState();
             return;
         }
 
-        // If not scanned yet (module was enabled while anvil was already open)
         if (!scanned) {
             scanInventoryForRenames();
         }
 
-        // No items to rename
         if (renameQueue.isEmpty() && stage == Stage.IDLE) {
             return;
         }
@@ -173,11 +162,11 @@ public class AutoRename extends Module {
     }
 
     private void tryStartNextRename(AnvilScreenHandler handler) {
-        if (!handler.getCursorStack().isEmpty() || handler.getSlot(ANVIL_INPUT_SLOT).hasStack() || handler.getSlot(ANVIL_OUTPUT_SLOT).hasStack()) {
+        if (!handler.getCursorStack().isEmpty() || handler.getSlot(ANVIL_INPUT_SLOT).hasStack()
+                || handler.getSlot(ANVIL_OUTPUT_SLOT).hasStack()) {
             return;
         }
 
-        // Get next item from queue
         currentTask = renameQueue.poll();
         if (currentTask == null) {
             return;
@@ -194,7 +183,6 @@ public class AutoRename extends Module {
     private void waitForItemInSlot0(AnvilScreenHandler handler) {
         waitTicks++;
         if (handler.getSlot(ANVIL_INPUT_SLOT).hasStack()) {
-            // Send rename packet with pre-calculated target name
             sendRenamePacket(currentTask.targetName);
             stage = Stage.WAITING_OUTPUT;
             waitTicks = 0;
@@ -230,9 +218,11 @@ public class AutoRename extends Module {
     }
 
     private boolean moveToInput(AnvilScreenHandler handler, int invSlot) {
-        if (mc.player == null) return false;
+        if (mc.player == null)
+            return false;
         int handlerSlot = toHandlerSlot(invSlot);
-        if (handlerSlot == -1) return false;
+        if (handlerSlot == -1)
+            return false;
 
         click(handler, handlerSlot);
         click(handler, ANVIL_INPUT_SLOT);
@@ -241,9 +231,11 @@ public class AutoRename extends Module {
     }
 
     private void moveInputBack(AnvilScreenHandler handler) {
-        if (currentTask == null) return;
+        if (currentTask == null)
+            return;
         int handlerSlot = toHandlerSlot(currentTask.slot);
-        if (handlerSlot == -1) return;
+        if (handlerSlot == -1)
+            return;
 
         if (handler.getSlot(ANVIL_INPUT_SLOT).hasStack()) {
             click(handler, ANVIL_INPUT_SLOT);
@@ -253,17 +245,18 @@ public class AutoRename extends Module {
     }
 
     private void click(AnvilScreenHandler handler, int slotId) {
-        if (mc.interactionManager == null || mc.player == null) return;
+        if (mc.interactionManager == null || mc.player == null)
+            return;
         mc.interactionManager.clickSlot(handler.syncId, slotId, 0, SlotActionType.PICKUP, mc.player);
     }
 
     private void sendRenamePacket(String name) {
-        if (mc.player == null || mc.player.networkHandler == null) return;
+        if (mc.player == null || mc.player.networkHandler == null)
+            return;
         mc.player.networkHandler.sendPacket(new RenameItemC2SPacket(name));
     }
 
     private boolean alreadyHasCorrectName(String currentName, String targetName) {
-        // If no prefix and no suffix, just compare with target name directly
         if (!usePrefix.get() && !useSuffix.get()) {
             return currentName.equals(targetName);
         }
@@ -277,20 +270,24 @@ public class AutoRename extends Module {
         String base = keepOriginal.get() ? stack.getName().getString() : replacementText.get();
 
         StringBuilder builder = new StringBuilder();
-        if (usePrefix.get()) builder.append(prefixText.get());
+        if (usePrefix.get())
+            builder.append(prefixText.get());
         builder.append(base);
-        if (useSuffix.get()) builder.append(suffixText.get());
+        if (useSuffix.get())
+            builder.append(suffixText.get());
 
         String finalName = builder.toString();
         return finalName.length() > 50 ? finalName.substring(0, 50) : finalName;
     }
 
     private int toHandlerSlot(int invSlot) {
-        if (invSlot < 0 || mc.player == null) return -1;
+        if (invSlot < 0 || mc.player == null)
+            return -1;
         if (invSlot >= HOTBAR_SIZE && invSlot < mc.player.getInventory().size()) {
             return MAIN_INVENTORY_START + (invSlot - HOTBAR_SIZE);
         }
-        if (invSlot < HOTBAR_SIZE) return HOTBAR_START + invSlot;
+        if (invSlot < HOTBAR_SIZE)
+            return HOTBAR_START + invSlot;
         return -1;
     }
 
@@ -303,8 +300,8 @@ public class AutoRename extends Module {
         delayTicks = 0;
     }
 
-    // Record to store rename task info
-    private record RenameTask(int slot, String targetName) {}
+    private record RenameTask(int slot, String targetName) {
+    }
 
     private enum Stage {
         IDLE,
@@ -313,4 +310,3 @@ public class AutoRename extends Module {
         RETURNING
     }
 }
-

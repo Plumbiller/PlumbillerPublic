@@ -1,9 +1,14 @@
 {
   "required": false,
+  "minVersion": "0.8",
   "package": "com.Plumbiller.publicaddon.mixin",
   "compatibilityLevel": "JAVA_21",
-  "client": [],
+  "mixins": [],
+  "client": [
+    "PauseScreenMixin"
+  ],
   "injectors": {
-    "defaultRequire": 1
+    "defaultRequire": 0
   }
 }
+

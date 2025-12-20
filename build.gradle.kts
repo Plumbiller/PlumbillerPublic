@@ -17,17 +17,20 @@ repositories {
         name = "meteor-maven-snapshots"
         url = uri("https://maven.meteordev.org/snapshots")
     }
+    mavenCentral()
 }
 
 dependencies {
-    // Fabric
     minecraft(libs.minecraft)
     mappings(variantOf(libs.yarn) { classifier("v2") })
     modImplementation(libs.fabric.loader)
 
-    // Meteor
     modImplementation(libs.meteor.client)
+
+
 }
+
+
 
 tasks {
     processResources {
