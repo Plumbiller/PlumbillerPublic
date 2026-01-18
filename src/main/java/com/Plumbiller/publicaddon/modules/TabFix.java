@@ -1,13 +1,15 @@
 package com.Plumbiller.publicaddon.modules;
 
 import com.Plumbiller.publicaddon.Main;
-import meteordevelopment.meteorclient.events.world.TickEvent;
-import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.systems.friends.Friends;
+import meteordevelopment.meteorclient.events.world.TickEvent;
+import meteordevelopment.meteorclient.settings.*;
+import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.client.network.PlayerListEntry;
 import net.minecraft.scoreboard.Scoreboard;
 import net.minecraft.scoreboard.Team;
+
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
 
@@ -16,8 +18,34 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class TabFix extends Module {
+    private final SettingGroup sgGeneral = settings.getDefaultGroup();
+
+    private final Setting<List<String>> rankHierarchy = sgGeneral.add(new StringListSetting.Builder()
+            .name("rank-hierarchy")
+            .description("Order of ranks from highest to lowest.")
+            .defaultValue(new ArrayList<>(Arrays.asList(
+                    "Friends", "OWNER", "Legend", "APEX", "Elite Ultra", "Elite", "Prime Ultra", "Prime", "YouTuber",
+                    "TikTok", "Bot")))
+            .onChanged(this::updatePriorities)
+            .build());
+
+    private final Setting<Boolean> displayBotRole = sgGeneral.add(new BoolSetting.Builder()
+            .name("custom-bot-rank")
+            .description("Whether to assign a specific rank to defined bots.")
+            .defaultValue(true)
+            .build());
+
+    private final Setting<List<String>> botUsernames = sgGeneral.add(new StringListSetting.Builder()
+            .name("bot-usernames")
+            .description("List of usernames to be treated as Bots. Use # for single digit, * for any characters.")
+            .defaultValue(new ArrayList<>(Arrays.asList("NotSus####", "Saturn*", "kazwqi", "moooomoooo")))
+            .visible(displayBotRole::get)
+            .onChanged(this::updateBotPatterns)
+            .build());
+
     private final Map<String, Integer> rankPriority = new HashMap<>();
-    private final List<Map.Entry<String, Integer>> sortedRanks = new ArrayList<>();
+    private final Map<UUID, Text> originalDisplayNames = new HashMap<>();
+    private List<Pattern> botPatterns = new ArrayList<>();
     private final Pattern rankPattern = Pattern.compile("^\\[(.*?)\\]");
     private static final String TEAM_PREFIX = "TF_";
 
@@ -27,21 +55,42 @@ public class TabFix extends Module {
 
     @Override
     public void onActivate() {
-        rankPriority.clear();
-        rankPriority.put("OWNER", 1);
-        rankPriority.put("Legend", 2);
-        rankPriority.put("APEX", 3);
-        rankPriority.put("Elite Ultra", 4);
-        rankPriority.put("Elite", 5);
-        rankPriority.put("Prime Ultra", 6);
-        rankPriority.put("Prime", 7);
-        rankPriority.put("YouTuber", 8);
-        rankPriority.put("TikTok", 9);
-        rankPriority.put("Bot", 10);
+        originalDisplayNames.clear();
+        updatePriorities(rankHierarchy.get());
+        updateBotPatterns(botUsernames.get());
+    }
 
-        sortedRanks.clear();
-        sortedRanks.addAll(rankPriority.entrySet());
-        sortedRanks.sort((e1, e2) -> Integer.compare(e2.getKey().length(), e1.getKey().length()));
+    private void updatePriorities(List<String> ranks) {
+        rankPriority.clear();
+        for (int i = 0; i < ranks.size(); i++) {
+            rankPriority.put(ranks.get(i), i + 1);
+        }
+    }
+
+    private void updateBotPatterns(List<String> patterns) {
+        List<Pattern> newPatterns = new ArrayList<>();
+        for (String p : patterns) {
+            StringBuilder sb = new StringBuilder("^");
+            for (char c : p.toCharArray()) {
+                if (c == '*') {
+                    sb.append(".*");
+                } else if (c == '#') {
+                    sb.append("\\d");
+                } else {
+                    if (Character.isLetterOrDigit(c)) {
+                        sb.append(c);
+                    } else {
+                        sb.append(Pattern.quote(String.valueOf(c)));
+                    }
+                }
+            }
+            sb.append("$");
+            try {
+                newPatterns.add(Pattern.compile(sb.toString()));
+            } catch (Exception e) {
+            }
+        }
+        this.botPatterns = newPatterns;
     }
 
     @Override
@@ -50,7 +99,6 @@ public class TabFix extends Module {
             return;
         Scoreboard scoreboard = mc.world.getScoreboard();
 
-        // Use a list to avoid ConcurrentModificationException while iterating
         List<Team> teamsToRemove = new ArrayList<>();
         for (Team team : scoreboard.getTeams()) {
             if (team.getName().startsWith(TEAM_PREFIX)) {
@@ -61,6 +109,15 @@ public class TabFix extends Module {
         for (Team team : teamsToRemove) {
             scoreboard.removeTeam(team);
         }
+
+        if (mc.getNetworkHandler() != null) {
+            for (PlayerListEntry entry : mc.getNetworkHandler().getPlayerList()) {
+                if (originalDisplayNames.containsKey(entry.getProfile().getId())) {
+                    entry.setDisplayName(originalDisplayNames.get(entry.getProfile().getId()));
+                }
+            }
+        }
+        originalDisplayNames.clear();
     }
 
     @EventHandler
@@ -74,10 +131,62 @@ public class TabFix extends Module {
         for (PlayerListEntry entry : entries) {
             String name = entry.getProfile().getName();
 
-            // Bot Detection: NotSus + 4 digits
-            // We force set their display name to [Bot] Name so they are visually marked
-            // and our rank parser picks them up automatically.
-            if (name.matches("NotSus\\d{4}")) {
+            if (originalDisplayNames.containsKey(entry.getProfile().getId())) {
+                boolean matchesBot = false;
+                List<Pattern> currentPatterns = this.botPatterns;
+                if (displayBotRole.get()) {
+                    for (Pattern pattern : currentPatterns) {
+                        if (pattern.matcher(name).matches()) {
+                            matchesBot = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (!matchesBot) {
+                    entry.setDisplayName(originalDisplayNames.remove(entry.getProfile().getId()));
+                }
+            }
+
+            String displayName = entry.getDisplayName() != null ? entry.getDisplayName().getString() : null;
+
+            if (displayName == null) {
+                displayName = name;
+            }
+
+            int priority = 999;
+
+            if (displayName != null) {
+                String cleanName = displayName.trim();
+                Matcher matcher = rankPattern.matcher(cleanName);
+                if (matcher.find()) {
+                    String rank = matcher.group(1);
+                    if (rankPriority.containsKey(rank)) {
+                        priority = Math.min(priority, rankPriority.get(rank));
+                    }
+                }
+            }
+
+            boolean isBot = false;
+            List<Pattern> currentPatterns = this.botPatterns;
+            if (displayBotRole.get()) {
+                for (Pattern pattern : currentPatterns) {
+                    if (pattern.matcher(name).matches()) {
+                        isBot = true;
+                        break;
+                    }
+                }
+            }
+
+            if (isBot) {
+                if (rankPriority.containsKey("Bot")) {
+                    priority = Math.min(priority, rankPriority.get("Bot"));
+                }
+
+                if (!originalDisplayNames.containsKey(entry.getProfile().getId())) {
+                    originalDisplayNames.put(entry.getProfile().getId(), entry.getDisplayName());
+                }
+
                 Text currentDisplay = entry.getDisplayName();
                 if (currentDisplay == null || !currentDisplay.getString().startsWith("[Bot]")) {
                     Text newDisplayName = Text.literal("[Bot] ").formatted(Formatting.DARK_GREEN)
@@ -86,40 +195,12 @@ public class TabFix extends Module {
                 }
             }
 
-            String displayName = entry.getDisplayName() != null ? entry.getDisplayName().getString() : null;
-
-            if (displayName == null) {
-                // If no display name, check if we should process it as unranked or skip
-                // Usually server sends [Rank] Name as display name.
-                // If null, it might just be the name.
-                displayName = name;
-            }
-
-            int priority = 999; // Default to lowest priority (Unranked)
-
-            if (displayName != null) {
-                // Remove leading whitespace just in case
-                displayName = displayName.trim();
-                Matcher matcher = rankPattern.matcher(displayName);
-                if (matcher.find()) {
-                    String rank = matcher.group(1);
-                    // Check against sorted ranks (longest first)
-                    for (Map.Entry<String, Integer> rankEntry : sortedRanks) {
-                        if (rank.startsWith(rankEntry.getKey())) {
-                            priority = rankEntry.getValue();
-                            break;
-                        }
-                    }
+            if (Friends.get().get(name) != null) {
+                if (rankPriority.containsKey("Friends")) {
+                    priority = Math.min(priority, rankPriority.get("Friends"));
                 }
             }
 
-            // Friend Detection: Place first (priority 0)
-            if (Friends.get().get(name) != null) {
-                priority = 0;
-            }
-
-            // Create team name based on priority
-            // Format: TF_01, TF_02, ... TF_999
             String teamName = String.format("%s%03d", TEAM_PREFIX, priority);
 
             Team team = scoreboard.getTeam(teamName);
@@ -127,7 +208,6 @@ public class TabFix extends Module {
                 team = scoreboard.addTeam(teamName);
             }
 
-            // If player is not in this team, add them
             if (!team.getPlayerList().contains(name)) {
                 scoreboard.addScoreHolderToTeam(name, team);
             }

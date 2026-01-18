@@ -51,3 +51,18 @@ If the auto accept config is enabled and the module detects a trusted player tel
 * .ra modify name (area name) (new name)
 * .ra modify area (area name) (new size)
 * .ra modify position (area name) < ~ ~ ~ | x y z >
+
+### Tab Fix
+* This module fixes the tab list sorting on 6b6t.
+* It automatically sorts players based on a customizable rank hierarchy (e.g., OWNER > Legend > APEX ...).
+* You can define a custom list of ranks and their order in the module settings.
+## Bot Support
+* Includes a feature to detect and tag bots in the tab list.
+* You can define bot patterns using wildcards (e.g., `NotSus####` for 4 digits, `Saturn*` for any suffix).
+* Detected bots are assigned a specific "Bot" rank priority (configurable in the hierarchy).
+* Bots get a special `[Bot]` tag in the tab list (Dark Green tag, Green username).
+## Friend Support
+* Integrated with Meteor Client friends.
+* "Friend" is a distinct rank in the hierarchy, allowing you to place your friends at the top (or anywhere else) in the tab list.
+## Smart Priority
+* If a player matches multiple roles (e.g., Prime and Friend), the module picks the highest priority role according to your hierarchy settings.
