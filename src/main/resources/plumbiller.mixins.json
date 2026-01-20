@@ -5,10 +5,10 @@
   "compatibilityLevel": "JAVA_21",
   "mixins": [],
   "client": [
-    "PauseScreenMixin"
+    "PauseScreenMixin",
+    "BetterTabFixMixin"
   ],
   "injectors": {
     "defaultRequire": 0
   }
 }
-
