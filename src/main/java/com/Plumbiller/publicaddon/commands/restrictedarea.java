@@ -53,7 +53,8 @@ public class restrictedarea extends Command {
                         .then(argument("player", PlayerListEntryArgumentType.create())
                                 .executes(context -> {
                                     String area = RestrictedAreaArgumentType.get(context);
-                                    String player = PlayerListEntryArgumentType.get(context).getProfile().getName();
+                                    String player = com.Plumbiller.publicaddon.util.MultiVersionCompat
+                                            .getProfileName(PlayerListEntryArgumentType.get(context).getProfile());
                                     return allowPlayer(player, area);
                                 }))));
 
@@ -121,7 +122,8 @@ public class restrictedarea extends Command {
             return SINGLE_SUCCESS;
         }
 
-        String dimension = mc.player.getWorld().getRegistryKey().getValue().toString();
+        String dimension = com.Plumbiller.publicaddon.util.MultiVersionCompat.getEntityWorld(mc.player).getRegistryKey()
+                .getValue().toString();
 
         Coordinates coords = new Coordinates(
                 mc.player.getX(),
@@ -358,7 +360,8 @@ public class restrictedarea extends Command {
             double y = parseCoord(parts[1], mc.player.getY());
             double z = parseCoord(parts[2], mc.player.getZ());
 
-            String dimension = mc.player.getWorld().getRegistryKey().getValue().toString();
+            String dimension = com.Plumbiller.publicaddon.util.MultiVersionCompat.getEntityWorld(mc.player)
+                    .getRegistryKey().getValue().toString();
             Coordinates coords = new Coordinates(x, y, z, dimension);
 
             if (RestrictedAreaManager.repositionRestrictedArea(serverIp, name, coords)) {

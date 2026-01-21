@@ -44,7 +44,8 @@ public class BetterTabFixMixin {
                     (PlayerListEntry entry) -> entry.getGameMode() == net.minecraft.world.GameMode.SPECTATOR ? 1 : 0)
                     .thenComparing(
                             entry -> entry.getScoreboardTeam() != null ? entry.getScoreboardTeam().getName() : "")
-                    .thenComparing(entry -> entry.getProfile().getName(), String::compareToIgnoreCase));
+                    .thenComparing(entry -> com.Plumbiller.publicaddon.util.MultiVersionCompat
+                            .getProfileName(entry.getProfile()), String::compareToIgnoreCase));
 
             module.totalPlayerCount = allEntries.size();
 

@@ -1,5 +1,7 @@
 package com.Plumbiller.publicaddon.modules;
 
+import com.Plumbiller.publicaddon.util.MultiVersionCompat;
+
 import com.Plumbiller.publicaddon.Main;
 import meteordevelopment.meteorclient.systems.modules.Modules;
 import meteordevelopment.meteorclient.systems.modules.render.BetterTab;
@@ -198,8 +200,8 @@ public class BetterTabFix extends Module {
 
         if (mc.player != null && mc.player.networkHandler != null) {
             for (PlayerListEntry entry : mc.player.networkHandler.getPlayerList()) {
-                if (originalDisplayNames.containsKey(entry.getProfile().getId())) {
-                    entry.setDisplayName(originalDisplayNames.get(entry.getProfile().getId()));
+                if (originalDisplayNames.containsKey(MultiVersionCompat.getProfileId(entry.getProfile()))) {
+                    entry.setDisplayName(originalDisplayNames.get(MultiVersionCompat.getProfileId(entry.getProfile())));
                 }
             }
         }
@@ -285,9 +287,9 @@ public class BetterTabFix extends Module {
         Collection<PlayerListEntry> entries = mc.player.networkHandler.getPlayerList();
 
         for (PlayerListEntry entry : entries) {
-            String name = entry.getProfile().getName();
+            String name = MultiVersionCompat.getProfileName(entry.getProfile());
 
-            if (originalDisplayNames.containsKey(entry.getProfile().getId())) {
+            if (originalDisplayNames.containsKey(MultiVersionCompat.getProfileId(entry.getProfile()))) {
                 boolean matchesBot = false;
                 List<Pattern> currentPatterns = this.botPatterns;
                 if (displayBotRole.get()) {
@@ -300,7 +302,8 @@ public class BetterTabFix extends Module {
                 }
 
                 if (!matchesBot) {
-                    entry.setDisplayName(originalDisplayNames.remove(entry.getProfile().getId()));
+                    entry.setDisplayName(
+                            originalDisplayNames.remove(MultiVersionCompat.getProfileId(entry.getProfile())));
                 }
             }
 
@@ -342,8 +345,9 @@ public class BetterTabFix extends Module {
                     priority = Math.min(priority, rankPriority.get("Bot"));
                 }
 
-                if (!originalDisplayNames.containsKey(entry.getProfile().getId())) {
-                    originalDisplayNames.put(entry.getProfile().getId(), entry.getDisplayName());
+                if (!originalDisplayNames.containsKey(MultiVersionCompat.getProfileId(entry.getProfile()))) {
+                    originalDisplayNames.put(MultiVersionCompat.getProfileId(entry.getProfile()),
+                            entry.getDisplayName());
                 }
 
                 Text currentDisplay = entry.getDisplayName();
@@ -379,9 +383,10 @@ public class BetterTabFix extends Module {
 
         name = playerListEntry.getDisplayName();
         if (name == null)
-            name = Text.literal(playerListEntry.getProfile().getName());
+            name = Text.literal(MultiVersionCompat.getProfileName(playerListEntry.getProfile()));
 
-        if (playerListEntry.getProfile().getId().toString().equals(mc.player.getGameProfile().getId().toString())
+        if (MultiVersionCompat.getProfileId(playerListEntry.getProfile()).toString()
+                .equals(MultiVersionCompat.getProfileId(mc.player.getGameProfile()).toString())
                 && self.get()) {
             color = selfColor.get();
         } else if (friends.get() && Friends.get().isFriend(playerListEntry)) {

@@ -264,7 +264,8 @@ public class RestrictedAreas extends Module {
                     if (serverData.isEmpty())
                         return;
 
-                    String currentDimension = mc.player.getWorld().getRegistryKey().getValue().toString();
+                    String currentDimension = com.Plumbiller.publicaddon.util.MultiVersionCompat
+                            .getEntityWorld(mc.player).getRegistryKey().getValue().toString();
                     for (var area : serverData.get().getRestrictedAreas()) {
                         var coords = area.getCoordinates();
                         if (!coords.getDimension().equals(currentDimension))
@@ -342,7 +343,8 @@ public class RestrictedAreas extends Module {
                     if (serverData.isEmpty())
                         return;
 
-                    String currentDimension = mc.player.getWorld().getRegistryKey().getValue().toString();
+                    String currentDimension = com.Plumbiller.publicaddon.util.MultiVersionCompat
+                            .getEntityWorld(mc.player).getRegistryKey().getValue().toString();
                     for (var area : serverData.get().getRestrictedAreas()) {
                         var coords = area.getCoordinates();
                         if (!coords.getDimension().equals(currentDimension))
@@ -387,7 +389,8 @@ public class RestrictedAreas extends Module {
         if (serverData.isEmpty())
             return;
 
-        String currentDimension = mc.player.getWorld().getRegistryKey().getValue().toString();
+        String currentDimension = com.Plumbiller.publicaddon.util.MultiVersionCompat.getEntityWorld(mc.player)
+                .getRegistryKey().getValue().toString();
         double playerX = mc.player.getX();
         double playerY = mc.player.getY();
         double playerZ = mc.player.getZ();
@@ -498,7 +501,8 @@ public class RestrictedAreas extends Module {
         if (serverData.isEmpty())
             return;
 
-        String currentDimension = mc.player.getWorld().getRegistryKey().getValue().toString();
+        String currentDimension = com.Plumbiller.publicaddon.util.MultiVersionCompat.getEntityWorld(mc.player)
+                .getRegistryKey().getValue().toString();
 
         for (var area : serverData.get().getRestrictedAreas()) {
             var coords = area.getCoordinates();

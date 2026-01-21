@@ -34,7 +34,8 @@ public class NotAllowedPlayerArgumentType implements ArgumentType<PlayerListEntr
 
         if (mc.getNetworkHandler() != null) {
             for (PlayerListEntry entry : mc.getNetworkHandler().getPlayerList()) {
-                if (entry.getProfile().getName().equals(playerName)) {
+                if (com.Plumbiller.publicaddon.util.MultiVersionCompat.getProfileName(entry.getProfile())
+                        .equals(playerName)) {
                     return entry;
                 }
             }
@@ -56,7 +57,8 @@ public class NotAllowedPlayerArgumentType implements ArgumentType<PlayerListEntr
                     Optional<RestrictedArea> area = RestrictedAreaManager.getRestrictedArea(serverIp, areaName);
 
                     for (PlayerListEntry entry : mc.getNetworkHandler().getPlayerList()) {
-                        String playerName = entry.getProfile().getName();
+                        String playerName = com.Plumbiller.publicaddon.util.MultiVersionCompat
+                                .getProfileName(entry.getProfile());
 
                         if (area.isEmpty() || !area.get().getAllowedPlayers().contains(playerName)) {
                             builder.suggest(playerName);

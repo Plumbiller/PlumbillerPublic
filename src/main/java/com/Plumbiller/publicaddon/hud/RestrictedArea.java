@@ -17,8 +17,7 @@ public class RestrictedArea extends HudElement {
             Main.HUD_GROUP,
             "restricted-area",
             "Displays the name of the restricted area you are currently in.",
-            RestrictedArea::new
-    );
+            RestrictedArea::new);
 
     public RestrictedArea() {
         super(INFO);
@@ -28,7 +27,8 @@ public class RestrictedArea extends HudElement {
 
     @Override
     public void render(HudRenderer renderer) {
-        com.Plumbiller.publicaddon.modules.RestrictedAreas module = Modules.get().get(com.Plumbiller.publicaddon.modules.RestrictedAreas.class);
+        com.Plumbiller.publicaddon.modules.RestrictedAreas module = Modules.get()
+                .get(com.Plumbiller.publicaddon.modules.RestrictedAreas.class);
 
         if (module == null || !module.shouldShowHud() || mc.player == null || mc.world == null) {
             return;
@@ -44,7 +44,8 @@ public class RestrictedArea extends HudElement {
             return;
         }
 
-        String currentDimension = mc.player.getWorld().getRegistryKey().getValue().toString();
+        String currentDimension = com.Plumbiller.publicaddon.util.MultiVersionCompat.getEntityWorld(mc.player)
+                .getRegistryKey().getValue().toString();
         double playerX = mc.player.getX();
         double playerY = mc.player.getY();
         double playerZ = mc.player.getZ();
@@ -54,7 +55,8 @@ public class RestrictedArea extends HudElement {
         for (var area : serverData.get().getRestrictedAreas()) {
             var coords = area.getCoordinates();
 
-            if (!coords.getDimension().equals(currentDimension)) continue;
+            if (!coords.getDimension().equals(currentDimension))
+                continue;
 
             int size = area.getArea();
             double minX = coords.getX() - size;

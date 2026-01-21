@@ -7,7 +7,7 @@ yarn-mappings = "1.21.7+build.8"
 fabric-loader = "0.16.14"
 
 # Loom (https://github.com/FabricMC/fabric-loom)
-loom = "1.12-SNAPSHOT"
+loom = "1.14-SNAPSHOT"
 
 # Meteor (https://github.com/MeteorDevelopment/meteor-client/)
 meteor = "1.21.7-SNAPSHOT"

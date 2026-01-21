@@ -95,7 +95,6 @@ If the auto accept config is enabled and the module detects a trusted player tel
 
 * **Fabric Loader**
 
-* **Fabric API**
 
 ### Installation:
 1. Install Fabric Loader for Minecraft 1.21.7.
