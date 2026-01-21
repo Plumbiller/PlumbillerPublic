@@ -15,12 +15,18 @@ import meteordevelopment.meteorclient.gui.widgets.pressable.WButton;
 import meteordevelopment.meteorclient.gui.widgets.pressable.WCheckbox;
 import meteordevelopment.meteorclient.gui.widgets.pressable.WMinus;
 import meteordevelopment.meteorclient.gui.widgets.pressable.WPlus;
+import meteordevelopment.meteorclient.gui.renderer.GuiRenderer;
+import meteordevelopment.meteorclient.gui.widgets.WWidget;
 import meteordevelopment.meteorclient.settings.*;
 import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.systems.modules.Modules;
-import net.minecraft.client.gui.screen.Screen;
 
-import static meteordevelopment.meteorclient.MeteorClient.mc;
+import net.minecraft.client.gui.screen.Screen;
+import net.minecraft.text.MutableText;
+import net.minecraft.text.OrderedText;
+import net.minecraft.text.Style;
+import net.minecraft.text.Text;
+import net.minecraft.util.Formatting;
 
 import java.io.BufferedReader;
 import java.io.InputStream;
@@ -32,19 +38,21 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import static meteordevelopment.meteorclient.MeteorClient.mc;
+
 public class ModInfoScreen extends WidgetScreen {
+    private static final Pattern IMAGE_PATTERN = Pattern.compile("!\\[(.*?)\\]\\((.*?)\\)");
+    private static final Pattern MODULE_PATTERN = Pattern.compile("\\[\\[(.*?)\\]\\]");
+
     private final Screen parent;
     private int currentTab = 0;
     private WContainer content;
     private meteordevelopment.meteorclient.gui.widgets.containers.WView view;
 
-    private static final Pattern IMAGE_PATTERN = Pattern.compile("!\\[(.*?)\\]\\((.*?)\\)");
-    private static final Pattern MODULE_PATTERN = Pattern.compile("\\[\\[(.*?)\\]\\]");
+    // Track visible settings to detect changes for dynamic updates
+    private final Map<SettingGroup, List<Setting<?>>> lastVisibleSettings = new HashMap<>();
 
-    // Track visible settings to detect changes
-    private final java.util.Map<SettingGroup, java.util.List<Setting<?>>> lastVisibleSettings = new java.util.HashMap<>();
-
-    // Saved state for returning from sub-screens
+    // Saved scroll position for returning from sub-screens
     private double savedScroll = -1;
 
     public ModInfoScreen(Screen parent) {
@@ -54,35 +62,50 @@ public class ModInfoScreen extends WidgetScreen {
 
     @Override
     public void initWidgets() {
-        WWindow window = super.add(theme.window("PlumbillerPublic Info")).center().minWidth(600).widget();
-
-        window.clear();
+        WWindow window = super.add(theme.window("PlumbillerPublic Info")).center().minWidth(1200).widget();
+        setWindowMinHeight(window, 500);
 
         // Tabs
         WHorizontalList tabs = window.add(theme.horizontalList()).expandX().widget();
-
         addTab(tabs, "Overview", 0);
         addTab(tabs, "Features", 1);
         addTab(tabs, "Dependencies", 2);
-
         window.add(theme.horizontalSeparator()).expandX();
 
-        // Scrollable View
+        // Scrollable content view
         view = window.add(theme.view()).expandX().widget();
         view.hasScrollBar = true;
         content = view.add(theme.verticalList()).expandX().widget();
 
         loadTab(currentTab);
-        restoreState();
+        restoreScrollPosition();
     }
 
-    private void addTab(WHorizontalList list, String name, int index) {
-        WButton b = list.add(theme.button(name)).expandX().widget();
-        b.action = () -> loadTab(index);
+    private void setWindowMinHeight(WWindow window, double height) {
+        try {
+            Class<?> c = window.getClass();
+            while (c != null) {
+                try {
+                    java.lang.reflect.Field f = c.getDeclaredField("minHeight");
+                    f.setAccessible(true);
+                    f.setDouble(window, height);
+                    return;
+                } catch (NoSuchFieldException e) {
+                    c = c.getSuperclass();
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void addTab(WHorizontalList tabs, String name, int index) {
+        WButton button = tabs.add(theme.button(name)).expandX().widget();
+        button.action = () -> loadTab(index);
     }
 
     private void loadTab(int index) {
-        this.currentTab = index;
+        currentTab = index;
         if (content != null) {
             content.clear();
         }
@@ -93,24 +116,24 @@ public class ModInfoScreen extends WidgetScreen {
             default -> "overview.md";
         };
 
-        loadAndProcessMarkdown("/assets/publicaddon/info/" + filename);
+        loadMarkdownFile("/assets/publicaddon/info/" + filename);
     }
 
-    private void loadAndProcessMarkdown(String path) {
+    private void loadMarkdownFile(String path) {
         if (content == null)
             return;
-        try {
-            InputStream stream = getClass().getResourceAsStream(path);
+
+        try (InputStream stream = getClass().getResourceAsStream(path)) {
             if (stream == null) {
                 content.add(theme.label("Error: Could not find " + path));
                 return;
             }
+
             BufferedReader reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8));
             String line;
             while ((line = reader.readLine()) != null) {
                 processMarkdownLine(line);
             }
-            reader.close();
         } catch (Exception e) {
             content.add(theme.label("Error loading file: " + e.getMessage()));
             e.printStackTrace();
@@ -119,376 +142,251 @@ public class ModInfoScreen extends WidgetScreen {
 
     private void processMarkdownLine(String line) {
         line = line.trim();
+
         if (line.isEmpty()) {
-            content.add(theme.label("")); // Empty line spacer
+            content.add(theme.label(""));
             return;
         }
 
-        Matcher imageMatcher = IMAGE_PATTERN.matcher(line);
-        if (imageMatcher.matches()) {
-            // Skip images
+        // Skip images
+        if (IMAGE_PATTERN.matcher(line).matches()) {
             return;
         }
 
-        String text = line;
-
-        // Check for dynamic module injection [[ModuleName]]
-        Matcher moduleMatcher = MODULE_PATTERN.matcher(text);
+        // Check for module settings injection [[ModuleName]]
+        Matcher moduleMatcher = MODULE_PATTERN.matcher(line);
         if (moduleMatcher.find()) {
-            String moduleName = moduleMatcher.group(1);
-            injectSettingsForModule(moduleName);
+            injectModuleSettings(moduleMatcher.group(1));
             return;
         }
 
-        // Standard markdown rendering
-        int maxWidth = maxWidth();
-
-        if (text.startsWith("# ")) {
-            content.add(theme.label(text.substring(2))).expandX();
+        // Render markdown text with color formatting
+        String text = line;
+        if (line.startsWith("# ")) {
+            text = "&l&n" + line.substring(2);
+            addFormattedLabel(text);
             content.add(theme.horizontalSeparator()).expandX();
-        } else if (text.startsWith("## ")) {
-            addWrappedLabel(text.substring(3), maxWidth);
-        } else if (text.startsWith("### ")) {
-            addWrappedLabel(text.substring(4), maxWidth);
-        } else if (text.startsWith("* ") || text.startsWith("- ")) {
-            addWrappedLabel("• " + text.substring(2), maxWidth);
+        } else if (line.startsWith("## ")) {
+            text = "&l" + line.substring(3);
+            addFormattedLabel(text);
+        } else if (line.startsWith("### ")) {
+            text = "&l" + line.substring(4);
+            addFormattedLabel(text);
+        } else if (line.startsWith("* ")) {
+            text = "• " + line.substring(2);
+            addFormattedLabel(text);
         } else {
-            addWrappedLabel(text, maxWidth);
+            addFormattedLabel(text);
         }
     }
 
-    private int maxWidth() {
-        return Math.min(this.width - 80, 1000);
+    private void addFormattedLabel(String textString) {
+        // Split text into wrapped lines while preserving formatting
+        int maxWidth = 1100; // Window is 1200px, leave margin for padding/scrollbar
+        List<Text> wrappedLines = wrapTextWithFormatting(textString, maxWidth);
+
+        for (Text line : wrappedLines) {
+            content.add(new WFormattedLabel(line.asOrderedText(), maxWidth)).expandX();
+        }
     }
 
-    private void addWrappedLabel(String text, int maxWidth) {
+    private List<Text> wrapTextWithFormatting(String textString, int maxWidth) {
         if (client == null || client.textRenderer == null) {
-            content.add(theme.label(text)).expandX();
-            return;
+            return List.of(parseText(textString));
         }
 
-        String[] words = text.split(" ");
+        List<Text> lines = new java.util.ArrayList<>();
+        String[] words = textString.split(" ");
         StringBuilder currentLine = new StringBuilder();
 
         for (String word : words) {
-            String testLine = currentLine.length() > 0 ? currentLine + " " + word : word;
-            if (client.textRenderer.getWidth(testLine) > maxWidth) {
+            String testLine = currentLine.length() == 0 ? word : currentLine + " " + word;
+            Text testText = parseText(testLine);
+            int lineWidth = client.textRenderer.getWidth(testText);
+
+            if (lineWidth <= maxWidth) {
+                // Word fits, add it
                 if (currentLine.length() > 0) {
-                    content.add(theme.label(currentLine.toString())).expandX();
+                    currentLine.append(" ");
                 }
-                currentLine = new StringBuilder(word);
+                currentLine.append(word);
             } else {
-                currentLine = new StringBuilder(testLine);
+                // Word doesn't fit
+                if (currentLine.length() > 0) {
+                    // Save current line and start new one
+                    lines.add(parseText(currentLine.toString()));
+                    currentLine = new StringBuilder(word);
+                } else {
+                    // Single word is too long, add it anyway
+                    lines.add(parseText(word));
+                }
             }
         }
 
+        // Add remaining text
         if (currentLine.length() > 0) {
-            content.add(theme.label(currentLine.toString())).expandX();
+            lines.add(parseText(currentLine.toString()));
+        }
+
+        return lines.isEmpty() ? List.of(Text.literal("")) : lines;
+    }
+
+    private Text parseText(String text) {
+        MutableText root = Text.literal("");
+        StringBuilder buffer = new StringBuilder();
+        Style style = Style.EMPTY;
+
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (c == '&' && i + 1 < text.length()) {
+                char code = text.charAt(i + 1);
+                Formatting formatting = Formatting.byCode(code);
+                if (formatting != null) {
+                    if (buffer.length() > 0) {
+                        root.append(Text.literal(buffer.toString()).setStyle(style));
+                        buffer.setLength(0);
+                    }
+                    if (formatting == Formatting.RESET) {
+                        style = Style.EMPTY;
+                    } else if (formatting.isColor()) {
+                        style = style.withColor(formatting);
+                    } else if (formatting.isModifier()) {
+                        style = style.withFormatting(formatting);
+                    }
+                    i++;
+                    continue;
+                }
+            }
+            buffer.append(c);
+        }
+        if (buffer.length() > 0) {
+            root.append(Text.literal(buffer.toString()).setStyle(style));
+        }
+        return root;
+    }
+
+    private class WFormattedLabel extends WWidget {
+        private final OrderedText text;
+        private final int maxWidth;
+
+        public WFormattedLabel(OrderedText text, int maxWidth) {
+            this.text = text;
+            this.maxWidth = maxWidth;
+        }
+
+        @Override
+        protected void onCalculateSize() {
+            double w = 0;
+            double h = 12;
+            if (mc.textRenderer != null) {
+                w = Math.min(mc.textRenderer.getWidth(text), maxWidth);
+                h = mc.textRenderer.fontHeight + 3;
+            }
+            width = w;
+            height = h;
+        }
+
+        @Override
+        protected void onRender(GuiRenderer renderer, double mouseX, double mouseY, double delta) {
+            final double[] currentX = { x };
+            final StringBuilder buffer = new StringBuilder();
+            // Wrapper to hold state across lambda
+            class RenderState {
+                meteordevelopment.meteorclient.utils.render.color.Color color = new meteordevelopment.meteorclient.utils.render.color.Color(
+                        255, 255, 255);
+                boolean empty = true;
+            }
+            final RenderState state = new RenderState();
+
+            text.accept((index, style, codePoint) -> {
+                meteordevelopment.meteorclient.utils.render.color.Color styleColor = new meteordevelopment.meteorclient.utils.render.color.Color(
+                        255, 255, 255);
+                if (style != null && style.getColor() != null) {
+                    styleColor = new meteordevelopment.meteorclient.utils.render.color.Color(
+                            style.getColor().getRgb() | 0xFF000000);
+                }
+
+                // If color changes and we have buffered text, render it
+                if (!state.empty && !styleColor.equals(state.color)) {
+                    String segment = buffer.toString();
+                    renderer.text(segment, currentX[0], y, state.color, false);
+                    currentX[0] += renderer.theme.textRenderer().getWidth(segment);
+                    buffer.setLength(0);
+                    state.empty = true;
+                }
+
+                state.color = styleColor;
+                buffer.append(Character.toChars(codePoint));
+                state.empty = false;
+                return true;
+            });
+
+            // Render remaining buffered text
+            if (!state.empty) {
+                String segment = buffer.toString();
+                renderer.text(segment, currentX[0], y, state.color, false);
+            }
         }
     }
 
-    private void injectSettingsForModule(String moduleName) {
-        // Clean up name (remove potential file extensions if user included them)
-        if (moduleName.endsWith(".java"))
-            moduleName = moduleName.substring(0, moduleName.length() - 5);
-        if (moduleName.endsWith(".class"))
-            moduleName = moduleName.substring(0, moduleName.length() - 6);
+    private void injectModuleSettings(String moduleName) {
+        // Clean up module name
+        moduleName = moduleName.replace(".java", "").replace(".class", "");
 
-        // Find module by simple name
+        // Find and inject module
         for (Module module : Modules.get().getAll()) {
             if (module.getClass().getSimpleName().equalsIgnoreCase(moduleName)) {
-                injectModuleSettings(module.getClass());
+                buildModuleSettings(module);
                 return;
             }
         }
+
         content.add(theme.label("Module not found: " + moduleName));
     }
 
-    // Track sections if needed
-    private final Map<SettingGroup, WSection> sectionMap = new HashMap<>();
+    private void buildModuleSettings(Module module) {
+        lastVisibleSettings.clear();
 
-    private void injectModuleSettings(Class<? extends Module> moduleClass) {
-        Module module = Modules.get().get(moduleClass);
-        if (module != null) {
-            sectionMap.clear();
-            lastVisibleSettings.clear();
+        content.add(theme.horizontalSeparator()).expandX();
+        content.add(theme.label(module.name + " Configuration")).expandX();
 
-            content.add(theme.horizontalSeparator()).expandX();
-            content.add(theme.label(module.name + " Configuration")).expandX();
+        for (SettingGroup group : module.settings) {
+            WSection section = content.add(theme.section(group.name)).expandX().widget();
+            section.setExpanded(true);
 
-            for (SettingGroup group : module.settings) {
-                // Create the section
-                WSection section = content.add(theme.section(group.name)).expandX().widget();
-                section.setExpanded(true);
-                sectionMap.put(group, section);
-
-                List<Setting<?>> visibleSettings = new java.util.ArrayList<>();
-                for (Setting<?> setting : group) {
-                    if (setting.isVisible()) {
-                        addSettingWidget(section, setting, group);
-                        visibleSettings.add(setting);
-                    }
-                }
-                lastVisibleSettings.put(group, visibleSettings);
-            }
-
-            content.add(theme.horizontalSeparator()).expandX();
-        } else {
-            content.add(theme.label("Module not found: " + moduleClass.getSimpleName()));
-        }
-    }
-
-    private void triggerReload() {
-        if (view == null)
-            return;
-
-        // Save scroll position using reflection
-        double storedScroll = 0;
-        try {
-            Class<?> clazz = view.getClass();
-            while (clazz != null) {
-                try {
-                    java.lang.reflect.Field f = clazz.getDeclaredField("scroll");
-                    f.setAccessible(true);
-                    storedScroll = f.getDouble(view);
-                    break;
-                } catch (NoSuchFieldException e) {
-                    clazz = clazz.getSuperclass();
-                }
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-
-        loadTab(currentTab);
-
-        // Restore scroll position using reflection
-        try {
-            Class<?> clazz = view.getClass();
-            while (clazz != null) {
-                try {
-                    java.lang.reflect.Field f = clazz.getDeclaredField("scroll");
-                    f.setAccessible(true);
-                    f.setDouble(view, storedScroll);
-                    view.invalidate(); // Force layout update
-                    return;
-                } catch (NoSuchFieldException e) {
-                    clazz = clazz.getSuperclass();
-                }
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    private void storeState() {
-        if (view != null) {
-            try {
-                Class<?> clazz = view.getClass();
-                while (clazz != null) {
-                    try {
-                        java.lang.reflect.Field f = clazz.getDeclaredField("scroll");
-                        f.setAccessible(true);
-                        savedScroll = f.getDouble(view);
-                        return;
-                    } catch (NoSuchFieldException e) {
-                        clazz = clazz.getSuperclass();
-                    }
-                }
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        }
-    }
-
-    private void restoreState() {
-        if (savedScroll != -1 && view != null) {
-            try {
-                Class<?> clazz = view.getClass();
-                while (clazz != null) {
-                    try {
-                        java.lang.reflect.Field f = clazz.getDeclaredField("scroll");
-                        f.setAccessible(true);
-                        f.setDouble(view, savedScroll);
-                        view.invalidate();
-                        savedScroll = -1; // Reset after restoring
-                        return;
-                    } catch (NoSuchFieldException e) {
-                        clazz = clazz.getSuperclass();
-                    }
-                }
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        }
-    }
-
-    // Callback adapter
-    private void triggerReload(SettingGroup group) {
-        triggerReload();
-    }
-
-    @Override
-    public void tick() {
-        super.tick();
-
-        boolean needsRefresh = false;
-
-        // Check for visibility changes
-        for (Map.Entry<SettingGroup, List<Setting<?>>> entry : lastVisibleSettings.entrySet()) {
-            SettingGroup group = entry.getKey();
-            List<Setting<?>> lastVisible = entry.getValue();
-
-            List<Setting<?>> currentVisible = new java.util.ArrayList<>();
+            List<Setting<?>> visibleSettings = new java.util.ArrayList<>();
             for (Setting<?> setting : group) {
                 if (setting.isVisible()) {
-                    currentVisible.add(setting);
+                    addSettingWidget(section, setting, group);
+                    visibleSettings.add(setting);
                 }
             }
-
-            if (!lastVisible.equals(currentVisible)) {
-                needsRefresh = true;
-                break;
-            }
+            lastVisibleSettings.put(group, visibleSettings);
         }
 
-        if (needsRefresh) {
-            triggerReload();
-        }
+        content.add(theme.horizontalSeparator()).expandX();
     }
 
     private void addSettingWidget(WContainer parent, Setting<?> setting, SettingGroup group) {
         WHorizontalList row = parent.add(theme.horizontalList()).expandX().widget();
         row.add(theme.label(formatSettingName(setting.name)));
 
-        if (setting instanceof BoolSetting bs) {
-            WCheckbox checkbox = row.add(theme.checkbox(bs.get())).expandCellX().widget();
-            checkbox.action = () -> {
-                bs.set(checkbox.checked);
-                triggerReload(group);
-            };
-            row.add(theme.label("")).expandX();
-            addResetButton(row, setting, group);
-
-        } else if (setting instanceof IntSetting is) {
-            // Use the setting's sliderMin/sliderMax for the slider range
-            int sliderMin = is.sliderMin;
-            int sliderMax = is.sliderMax;
-            boolean noSlider = (sliderMin == 0 && sliderMax == 0);
-
-            WIntEdit edit = row.add(theme.intEdit(
-                    is.get(), // current value
-                    is.min, // min value (for validation)
-                    is.max, // max value (for validation)
-                    sliderMin, // slider min (from .sliderRange())
-                    sliderMax, // slider max (from .sliderRange())
-                    noSlider // noSlider flag
-            )).minWidth(100).expandCellX().widget();
-
-            edit.action = () -> is.set(edit.get());
-            edit.actionOnRelease = () -> {
-                is.set(edit.get());
-                triggerReload(group);
-            };
-            row.add(theme.label("")).expandX();
-            addResetButton(row, setting, group);
-
-        } else if (setting instanceof DoubleSetting ds) {
-            // Use the setting's sliderMin/sliderMax for the slider range
-            double sliderMin = ds.sliderMin;
-            double sliderMax = ds.sliderMax;
-            boolean noSlider = (sliderMin == 0 && sliderMax == 0);
-
-            WDoubleEdit edit = row.add(theme.doubleEdit(
-                    ds.get(), // current value
-                    ds.min, // min value (for validation)
-                    ds.max, // max value (for validation)
-                    sliderMin, // slider min (from .sliderRange())
-                    sliderMax, // slider max (from .sliderRange())
-                    ds.decimalPlaces, // decimal places
-                    noSlider // noSlider flag
-            )).minWidth(100).expandCellX().widget();
-
-            edit.action = () -> ds.set(edit.get());
-            edit.actionOnRelease = () -> {
-                ds.set(edit.get());
-                triggerReload(group);
-            };
-            row.add(theme.label("")).expandX();
-            addResetButton(row, setting, group);
-
-        } else if (setting instanceof StringSetting ss) {
-            WTextBox textBox = row.add(theme.textBox(ss.get())).minWidth(100).expandCellX().widget();
-            textBox.action = () -> ss.set(textBox.get());
-            textBox.actionOnUnfocused = () -> {
-                ss.set(textBox.get());
-                triggerReload(group);
-            };
-            row.add(theme.label("")).expandX();
-            addResetButton(row, setting, group);
-
-        } else if (setting instanceof EnumSetting<?> es) {
-            Object[] enumValues = es.get().getClass().getEnumConstants();
-            if (enumValues != null) {
-                WDropdown<Object> dropdown = row.add(theme.dropdown(enumValues, es.get())).expandCellX().widget();
-                dropdown.action = () -> {
-                    setEnumUntyped(es, dropdown.get());
-                    triggerReload(group);
-                };
-            }
-            row.add(theme.label("")).expandX();
-            addResetButton(row, setting, group);
-
-        } else if (setting instanceof ColorSetting cs) {
-            // Add color preview quad
-            row.add(theme.quad(cs.get())).widget();
-
-            // Add edit button to open color picker
-            WButton edit = row.add(theme.button("Edit")).widget();
-            edit.action = () -> {
-                storeState();
-                mc.setScreen(new meteordevelopment.meteorclient.gui.screens.settings.ColorSettingScreen(theme, cs));
-            };
-
-            row.add(theme.label("")).expandX();
-            addResetButton(row, setting, group);
-
-        } else if (setting instanceof StringListSetting sls) {
-            row.add(theme.label("")).expandX();
-            addResetButton(row, setting, group);
-
-            // Nested list for items
-            WVerticalList list = parent.add(theme.verticalList()).expandX().widget();
-            for (int i = 0; i < sls.get().size(); i++) {
-                int index = i;
-                WHorizontalList itemRow = list.add(theme.horizontalList()).expandX().widget();
-                WTextBox box = itemRow.add(theme.textBox(sls.get().get(i))).minWidth(100).expandX().widget();
-                box.action = () -> {
-                    if (index < sls.get().size()) {
-                        sls.get().set(index, box.get());
-                    }
-                };
-
-                WMinus remove = itemRow.add(theme.minus()).widget();
-                remove.action = () -> {
-                    if (index < sls.get().size()) {
-                        sls.get().remove(index);
-                    }
-                };
-            }
-            WHorizontalList addRow = list.add(theme.horizontalList()).expandX().widget();
-            WPlus add = addRow.add(theme.plus()).widget();
-            add.action = () -> sls.get().add("");
-
-        } else if (setting instanceof ItemListSetting ils) {
-            WButton select = row.add(theme.button("Select")).expandCellX().widget();
-            select.action = () -> {
-                storeState();
-                mc.setScreen(new meteordevelopment.meteorclient.gui.screens.settings.ItemListSettingScreen(theme, ils));
-            };
-            row.add(theme.label("")).expandX();
-            addResetButton(row, setting, group);
-
+        if (setting instanceof BoolSetting boolSetting) {
+            addBoolSetting(row, boolSetting, group);
+        } else if (setting instanceof IntSetting intSetting) {
+            addIntSetting(row, intSetting, group);
+        } else if (setting instanceof DoubleSetting doubleSetting) {
+            addDoubleSetting(row, doubleSetting, group);
+        } else if (setting instanceof StringSetting stringSetting) {
+            addStringSetting(row, stringSetting, group);
+        } else if (setting instanceof EnumSetting<?> enumSetting) {
+            addEnumSetting(row, enumSetting, group);
+        } else if (setting instanceof ColorSetting colorSetting) {
+            addColorSetting(row, colorSetting, group);
+        } else if (setting instanceof StringListSetting stringListSetting) {
+            addStringListSetting(row, parent, stringListSetting, group);
+        } else if (setting instanceof ItemListSetting itemListSetting) {
+            addItemListSetting(row, itemListSetting, group);
         } else {
             row.add(theme.label(setting.get().toString())).expandCellX();
             row.add(theme.label("")).expandX();
@@ -496,17 +394,154 @@ public class ModInfoScreen extends WidgetScreen {
         }
     }
 
-    private void addResetButton(WHorizontalList row, Setting<?> setting, SettingGroup group) {
-        WButton reset = row.add(theme.button("Reset")).widget();
-        reset.action = () -> {
-            setting.reset();
-            triggerReload(group);
+    private void addBoolSetting(WHorizontalList row, BoolSetting setting, SettingGroup group) {
+        WCheckbox checkbox = row.add(theme.checkbox(setting.get())).expandCellX().widget();
+        checkbox.action = () -> {
+            setting.set(checkbox.checked);
+            reloadWithScrollPreservation();
         };
-        reset.tooltip = "Reset to default";
+        row.add(theme.label("")).expandX();
+        addResetButton(row, setting, group);
+    }
+
+    private void addIntSetting(WHorizontalList row, IntSetting setting, SettingGroup group) {
+        boolean noSlider = (setting.sliderMin == 0 && setting.sliderMax == 0);
+
+        WIntEdit edit = row.add(theme.intEdit(
+                setting.get(),
+                setting.min,
+                setting.max,
+                setting.sliderMin,
+                setting.sliderMax,
+                noSlider)).minWidth(100).expandCellX().widget();
+
+        edit.action = () -> setting.set(edit.get());
+        edit.actionOnRelease = () -> {
+            setting.set(edit.get());
+            reloadWithScrollPreservation();
+        };
+
+        row.add(theme.label("")).expandX();
+        addResetButton(row, setting, group);
+    }
+
+    private void addDoubleSetting(WHorizontalList row, DoubleSetting setting, SettingGroup group) {
+        boolean noSlider = (setting.sliderMin == 0 && setting.sliderMax == 0);
+
+        WDoubleEdit edit = row.add(theme.doubleEdit(
+                setting.get(),
+                setting.min,
+                setting.max,
+                setting.sliderMin,
+                setting.sliderMax,
+                setting.decimalPlaces,
+                noSlider)).minWidth(100).expandCellX().widget();
+
+        edit.action = () -> setting.set(edit.get());
+        edit.actionOnRelease = () -> {
+            setting.set(edit.get());
+            reloadWithScrollPreservation();
+        };
+
+        row.add(theme.label("")).expandX();
+        addResetButton(row, setting, group);
+    }
+
+    private void addStringSetting(WHorizontalList row, StringSetting setting, SettingGroup group) {
+        WTextBox textBox = row.add(theme.textBox(setting.get())).minWidth(100).expandCellX().widget();
+        textBox.action = () -> setting.set(textBox.get());
+        textBox.actionOnUnfocused = () -> {
+            setting.set(textBox.get());
+            reloadWithScrollPreservation();
+        };
+
+        row.add(theme.label("")).expandX();
+        addResetButton(row, setting, group);
+    }
+
+    private void addEnumSetting(WHorizontalList row, EnumSetting<?> setting, SettingGroup group) {
+        Object[] enumValues = setting.get().getClass().getEnumConstants();
+        if (enumValues != null) {
+            WDropdown<Object> dropdown = row.add(theme.dropdown(enumValues, setting.get())).expandCellX().widget();
+            dropdown.action = () -> {
+                setEnumValue(setting, dropdown.get());
+                reloadWithScrollPreservation();
+            };
+        }
+
+        row.add(theme.label("")).expandX();
+        addResetButton(row, setting, group);
+    }
+
+    private void addColorSetting(WHorizontalList row, ColorSetting setting, SettingGroup group) {
+        row.add(theme.quad(setting.get())).widget();
+
+        WButton editButton = row.add(theme.button("Edit")).widget();
+        editButton.action = () -> {
+            saveScrollPosition();
+            mc.setScreen(new meteordevelopment.meteorclient.gui.screens.settings.ColorSettingScreen(theme, setting));
+        };
+
+        row.add(theme.label("")).expandX();
+        addResetButton(row, setting, group);
+    }
+
+    private void addStringListSetting(WHorizontalList row, WContainer parent, StringListSetting setting,
+            SettingGroup group) {
+        row.add(theme.label("")).expandX();
+        addResetButton(row, setting, group);
+
+        WVerticalList list = parent.add(theme.verticalList()).expandX().widget();
+
+        for (int i = 0; i < setting.get().size(); i++) {
+            int index = i;
+            WHorizontalList itemRow = list.add(theme.horizontalList()).expandX().widget();
+
+            WTextBox textBox = itemRow.add(theme.textBox(setting.get().get(i))).minWidth(100).expandX().widget();
+            textBox.action = () -> {
+                if (index < setting.get().size()) {
+                    setting.get().set(index, textBox.get());
+                }
+            };
+
+            WMinus removeButton = itemRow.add(theme.minus()).widget();
+            removeButton.action = () -> {
+                if (index < setting.get().size()) {
+                    setting.get().remove(index);
+                    reloadWithScrollPreservation();
+                }
+            };
+        }
+
+        WHorizontalList addRow = list.add(theme.horizontalList()).expandX().widget();
+        WPlus addButton = addRow.add(theme.plus()).widget();
+        addButton.action = () -> {
+            setting.get().add("");
+            reloadWithScrollPreservation();
+        };
+    }
+
+    private void addItemListSetting(WHorizontalList row, ItemListSetting setting, SettingGroup group) {
+        WButton selectButton = row.add(theme.button("Select")).expandCellX().widget();
+        selectButton.action = () -> {
+            saveScrollPosition();
+            mc.setScreen(new meteordevelopment.meteorclient.gui.screens.settings.ItemListSettingScreen(theme, setting));
+        };
+
+        row.add(theme.label("")).expandX();
+        addResetButton(row, setting, group);
+    }
+
+    private void addResetButton(WHorizontalList row, Setting<?> setting, SettingGroup group) {
+        WButton resetButton = row.add(theme.button("Reset")).widget();
+        resetButton.action = () -> {
+            setting.reset();
+            reloadWithScrollPreservation();
+        };
+        resetButton.tooltip = "Reset to default";
     }
 
     private String formatSettingName(String name) {
-        // Convert "some-setting-name" to "Some Setting Name"
         StringBuilder result = new StringBuilder();
         boolean capitalizeNext = true;
 
@@ -526,9 +561,96 @@ public class ModInfoScreen extends WidgetScreen {
     }
 
     @SuppressWarnings({ "unchecked", "rawtypes" })
-    private void setEnumUntyped(EnumSetting setting, Object value) {
-        if (value != null)
+    private void setEnumValue(EnumSetting setting, Object value) {
+        if (value != null) {
             setting.set((Enum) value);
+        }
+    }
+
+    private void reloadWithScrollPreservation() {
+        if (view == null)
+            return;
+
+        double scroll = getScrollPosition(view);
+        loadTab(currentTab);
+        setScrollPosition(view, scroll);
+    }
+
+    private void saveScrollPosition() {
+        if (view != null) {
+            savedScroll = getScrollPosition(view);
+        }
+    }
+
+    private void restoreScrollPosition() {
+        if (savedScroll != -1 && view != null) {
+            setScrollPosition(view, savedScroll);
+            savedScroll = -1;
+        }
+    }
+
+    private double getScrollPosition(Object view) {
+        try {
+            Class<?> clazz = view.getClass();
+            while (clazz != null) {
+                try {
+                    java.lang.reflect.Field field = clazz.getDeclaredField("scroll");
+                    field.setAccessible(true);
+                    return field.getDouble(view);
+                } catch (NoSuchFieldException e) {
+                    clazz = clazz.getSuperclass();
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return 0;
+    }
+
+    private void setScrollPosition(Object view, double scroll) {
+        try {
+            Class<?> clazz = view.getClass();
+            while (clazz != null) {
+                try {
+                    java.lang.reflect.Field field = clazz.getDeclaredField("scroll");
+                    field.setAccessible(true);
+                    field.setDouble(view, scroll);
+
+                    // Invalidate to force layout update
+                    if (view instanceof meteordevelopment.meteorclient.gui.widgets.containers.WView wView) {
+                        wView.invalidate();
+                    }
+                    return;
+                } catch (NoSuchFieldException e) {
+                    clazz = clazz.getSuperclass();
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    @Override
+    public void tick() {
+        super.tick();
+
+        // Check if any setting visibility has changed and reload if needed
+        for (Map.Entry<SettingGroup, List<Setting<?>>> entry : lastVisibleSettings.entrySet()) {
+            SettingGroup group = entry.getKey();
+            List<Setting<?>> lastVisible = entry.getValue();
+
+            List<Setting<?>> currentVisible = new java.util.ArrayList<>();
+            for (Setting<?> setting : group) {
+                if (setting.isVisible()) {
+                    currentVisible.add(setting);
+                }
+            }
+
+            if (!lastVisible.equals(currentVisible)) {
+                reloadWithScrollPreservation();
+                return;
+            }
+        }
     }
 
     @Override
