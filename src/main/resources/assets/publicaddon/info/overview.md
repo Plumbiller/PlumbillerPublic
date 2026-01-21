@@ -2,7 +2,7 @@
 
 # Meteor Client Addon
 
-&dPlumbillerPublic&r is a Public meteor client addon created by &5dlumbiller&r. It's a work in progress, so expect some bugs and missing features 
+&dPlumbillerPublic&r is a Public meteor client addon created by &dPlumbiller&r. It's a work in progress, so expect some bugs and missing features 
 which will be added and solved eventually.
 
 # Contributions
