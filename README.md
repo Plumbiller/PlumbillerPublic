@@ -66,10 +66,15 @@ If the auto accept config is enabled and the module detects a trusted player tel
 * .ra modify area (area name) (new size)
 * .ra modify position (area name) < ~ ~ ~ | x y z >
 
-### Tab Fix
+### Better Tab Fix
 * This module fixes the tab list sorting on 6b6t.
 * It automatically sorts players based on a customizable rank hierarchy (e.g., OWNER > Legend > APEX ...).
 * You can define a custom list of ranks and their order in the module settings.
+
+### Tab Scroll
+* Allows you to scroll in tab so you are able to see more players.
+* You can define the scroll mode :one by one, by columns, full tab.
+
 ## Bot Support
 * Includes a feature to detect and tag bots in the tab list.
 * You can define bot patterns using wildcards (e.g., `NotSus####` for 4 digits, `Saturn*` for any suffix).

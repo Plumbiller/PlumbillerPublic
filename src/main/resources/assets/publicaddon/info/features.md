@@ -80,6 +80,10 @@ Auto accept will always take 10 seconds to execute, just in case.
 - It automatically sorts players based on a customizable rank hierarchy (e.g., OWNER > Legend > APEX ...).
 - You can define a custom list of ranks and their order in the module settings.
 
+&eTab Scroll
+- Allows you to scroll in tab so you are able to see more players.
+- You can define the scroll mode :one by one, by columns, full tab.
+
 &eBot Support
 - Includes a feature to detect and tag bots in the tab list.
 - You can define bot patterns using wildcards (e.g., `NotSus####` for 4 digits, `Saturn*` or `*Bot*` for any suffix).
