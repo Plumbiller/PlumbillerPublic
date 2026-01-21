@@ -5,7 +5,7 @@
 &cRequired Mods:
 - Meteor Client (1.21.7)
 
-- Fabric Loader
+- Fabric
 
 Installation:
 1. Install Fabric Loader for Minecraft 1.21.7.

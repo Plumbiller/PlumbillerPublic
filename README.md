@@ -93,7 +93,7 @@ If the auto accept config is enabled and the module detects a trusted player tel
 ### Required Mods:
 * **Meteor Client (1.21.7)**
 
-* **Fabric Loader**
+* **Fabric**
 
 
 ### Installation:

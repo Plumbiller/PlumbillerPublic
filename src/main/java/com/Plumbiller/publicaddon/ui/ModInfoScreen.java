@@ -49,10 +49,8 @@ public class ModInfoScreen extends WidgetScreen {
     private WContainer content;
     private meteordevelopment.meteorclient.gui.widgets.containers.WView view;
 
-    // Track visible settings to detect changes for dynamic updates
     private final Map<SettingGroup, List<Setting<?>>> lastVisibleSettings = new HashMap<>();
 
-    // Saved scroll position for returning from sub-screens
     private double savedScroll = -1;
 
     public ModInfoScreen(Screen parent) {
@@ -65,14 +63,12 @@ public class ModInfoScreen extends WidgetScreen {
         WWindow window = super.add(theme.window("PlumbillerPublic Info")).center().minWidth(1200).widget();
         setWindowMinHeight(window, 500);
 
-        // Tabs
         WHorizontalList tabs = window.add(theme.horizontalList()).expandX().widget();
         addTab(tabs, "Overview", 0);
         addTab(tabs, "Features", 1);
         addTab(tabs, "Dependencies", 2);
         window.add(theme.horizontalSeparator()).expandX();
 
-        // Scrollable content view
         view = window.add(theme.view()).expandX().widget();
         view.hasScrollBar = true;
         content = view.add(theme.verticalList()).expandX().widget();
@@ -148,19 +144,16 @@ public class ModInfoScreen extends WidgetScreen {
             return;
         }
 
-        // Skip images
         if (IMAGE_PATTERN.matcher(line).matches()) {
             return;
         }
 
-        // Check for module settings injection [[ModuleName]]
         Matcher moduleMatcher = MODULE_PATTERN.matcher(line);
         if (moduleMatcher.find()) {
             injectModuleSettings(moduleMatcher.group(1));
             return;
         }
 
-        // Render markdown text with color formatting
         String text = line;
         if (line.startsWith("# ")) {
             text = "&l&n" + line.substring(2);
@@ -181,8 +174,7 @@ public class ModInfoScreen extends WidgetScreen {
     }
 
     private void addFormattedLabel(String textString) {
-        // Split text into wrapped lines while preserving formatting
-        int maxWidth = 1100; // Window is 1200px, leave margin for padding/scrollbar
+        int maxWidth = 1100;
         List<Text> wrappedLines = wrapTextWithFormatting(textString, maxWidth);
 
         for (Text line : wrappedLines) {
@@ -205,25 +197,20 @@ public class ModInfoScreen extends WidgetScreen {
             int lineWidth = client.textRenderer.getWidth(testText);
 
             if (lineWidth <= maxWidth) {
-                // Word fits, add it
                 if (currentLine.length() > 0) {
                     currentLine.append(" ");
                 }
                 currentLine.append(word);
             } else {
-                // Word doesn't fit
                 if (currentLine.length() > 0) {
-                    // Save current line and start new one
                     lines.add(parseText(currentLine.toString()));
                     currentLine = new StringBuilder(word);
                 } else {
-                    // Single word is too long, add it anyway
                     lines.add(parseText(word));
                 }
             }
         }
 
-        // Add remaining text
         if (currentLine.length() > 0) {
             lines.add(parseText(currentLine.toString()));
         }
@@ -290,7 +277,6 @@ public class ModInfoScreen extends WidgetScreen {
         protected void onRender(GuiRenderer renderer, double mouseX, double mouseY, double delta) {
             final double[] currentX = { x };
             final StringBuilder buffer = new StringBuilder();
-            // Wrapper to hold state across lambda
             class RenderState {
                 meteordevelopment.meteorclient.utils.render.color.Color color = new meteordevelopment.meteorclient.utils.render.color.Color(
                         255, 255, 255);
@@ -306,7 +292,6 @@ public class ModInfoScreen extends WidgetScreen {
                             style.getColor().getRgb() | 0xFF000000);
                 }
 
-                // If color changes and we have buffered text, render it
                 if (!state.empty && !styleColor.equals(state.color)) {
                     String segment = buffer.toString();
                     renderer.text(segment, currentX[0], y, state.color, false);
@@ -321,7 +306,6 @@ public class ModInfoScreen extends WidgetScreen {
                 return true;
             });
 
-            // Render remaining buffered text
             if (!state.empty) {
                 String segment = buffer.toString();
                 renderer.text(segment, currentX[0], y, state.color, false);
@@ -330,10 +314,8 @@ public class ModInfoScreen extends WidgetScreen {
     }
 
     private void injectModuleSettings(String moduleName) {
-        // Clean up module name
         moduleName = moduleName.replace(".java", "").replace(".class", "");
 
-        // Find and inject module
         for (Module module : Modules.get().getAll()) {
             if (module.getClass().getSimpleName().equalsIgnoreCase(moduleName)) {
                 buildModuleSettings(module);
@@ -616,7 +598,6 @@ public class ModInfoScreen extends WidgetScreen {
                     field.setAccessible(true);
                     field.setDouble(view, scroll);
 
-                    // Invalidate to force layout update
                     if (view instanceof meteordevelopment.meteorclient.gui.widgets.containers.WView wView) {
                         wView.invalidate();
                     }
@@ -634,7 +615,6 @@ public class ModInfoScreen extends WidgetScreen {
     public void tick() {
         super.tick();
 
-        // Check if any setting visibility has changed and reload if needed
         for (Map.Entry<SettingGroup, List<Setting<?>>> entry : lastVisibleSettings.entrySet()) {
             SettingGroup group = entry.getKey();
             List<Setting<?>> lastVisible = entry.getValue();

@@ -43,7 +43,6 @@ public class Main extends MeteorAddon {
 
     @PostInit
     public static void postInit() {
-        // com.Plumbiller.publicaddon.ui.ModInfoScreen.preload();
 
         boolean hasRestrictedArea = false;
         for (var element : Hud.get()) {
