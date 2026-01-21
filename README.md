@@ -4,7 +4,7 @@
 
 PlumbillerPublic is a Public meteor client addon created by Plumbiller. It's a work in progress, so expect some bugs and missing features which will be added and solved eventually.
 
-## Contributions
+## Cumtributing
 
 Cumtributions are whalecum, you can do so by creating a pull request on 
 https://github.com/Plumbiller/PlumbillerPublic
@@ -88,20 +88,24 @@ If the auto accept config is enabled and the module detects a trusted player tel
 
 # Dependencies
 
-* **Minecraft 1.21.7**
+* **Minecraft** 
 
 ## Required Mods:
-* **Meteor Client (1.21.7)**
+* **Meteor Client**
 
 * **Fabric**
 
 
 ## Installation:
-1. Install Fabric Loader for Minecraft 1.21.7.
+1. Install Fabric Loader for Minecraft.
 2. Place mods JAR in .minecraft/mods folder
 3. Launch Minecraft with Fabric profile
-4. Enable module in Meteor Client menu
+4. Enable modules in Meteor Client menu
 
 
 
-If you are a nerdy good boi and you want to build the mod by yourself, I probably don't need to tell you how to do so. Do the gradlew thingy.
+If you are a nerdy good boi and you want to build the mod by yourself, you can use the minecraft version of your choice as long as it's listed in the following list:
+
+**1.21.4, 1.21.5, 1.21.6, 1.21.7, 1.21.8, 1.21.10, 1.21.11**
+
+To do so, you can use the `buildAll` task or build specific versions using the custom `buildv_(version)` tasks. For more information, check the [MULTIVERSION.md](MULTIVERSION.md) file.
