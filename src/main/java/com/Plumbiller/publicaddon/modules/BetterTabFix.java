@@ -30,7 +30,6 @@ public class BetterTabFix extends Module {
 
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
 
-    private int lastValidTabSize = 100;
     private int lastValidTabHeight = 20;
 
     public final Setting<Integer> tabSize = sgGeneral.add(new IntSetting.Builder()
@@ -61,7 +60,7 @@ public class BetterTabFix extends Module {
                 tabHeight.set(newHeight);
             }
         }
-        lastValidTabSize = newSize;
+
     }
 
     private void onTabHeightChanged(Integer newHeight) {
@@ -207,7 +206,6 @@ public class BetterTabFix extends Module {
 
         if (mc.options.playerListKey.isPressed()) {
             if (event.value > 0) {
-                int maxOffset = Math.max(0, totalPlayerCount - tabSize.get());
                 if (scrollOffset > 0) {
                     scrollOffset--;
                 }

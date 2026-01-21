@@ -4,7 +4,7 @@
 * This module let the player automatically rename items in bulk using anvils.
 * You can set a prefix and/or suffix for the items, maintaining the original name or modifing it too.
 
-![Auto Rename](/docs_assets/autorename.png)
+[[AutoRename]]
 
 ### Restricted Areas
 * Restricted areas are highly confurable zones that automatically manages (if you want to) the teleportation of allowed players in specific areas.
@@ -14,8 +14,8 @@
 * In order to render the areas and automatically manage your teleport requests (if enabled), you need to enable the RestrictedAreas module in the meteor menu.
 * Note: I recommend using this module in case teleport requests from random players are annoying for you when you are in your homes or other private areas, and you don't want to accidentally accept a teleport request from a stranger, or if you want to automatically accept teleport requests from trusted players in a specific area.
 
-### Restricted Areas Configuration
-![Restricted Areas](/docs_assets/restrictedareas.png)
+
+[[RestrictedAreas]]
 
 * As you can see in the image you can configure the HUD if you want more visual information about the area you are in, and how many players are allowed there. You can change the size, transparency or disable it.
 * You can also choose if you want to render the area or not, and what colors you want to use for the lines and border (my favourite is rainbow mode). You can also choose between solid or pulsating render mode, tho I don't personally like the pulsating mode, but whatever.
@@ -53,12 +53,13 @@ If the auto accept config is enabled and the module detects a trusted player tel
 * .ra modify position (area name) < ~ ~ ~ | x y z >
 
 ### Tab Fix
+[[BetterTabFix]]
 * This module fixes the tab list sorting on 6b6t.
 * It automatically sorts players based on a customizable rank hierarchy (e.g., OWNER > Legend > APEX ...).
 * You can define a custom list of ranks and their order in the module settings.
 ## Bot Support
 * Includes a feature to detect and tag bots in the tab list.
-* You can define bot patterns using wildcards (e.g., `NotSus####` for 4 digits, `Saturn*` for any suffix).
+* You can define bot patterns using wildcards (e.g., `NotSus####` for 4 digits, `Saturn*` or `*Bot*` for any suffix).
 * Detected bots are assigned a specific "Bot" rank priority (configurable in the hierarchy).
 * Bots get a special `[Bot]` tag in the tab list (Dark Green tag, Green username).
 ## Friend Support

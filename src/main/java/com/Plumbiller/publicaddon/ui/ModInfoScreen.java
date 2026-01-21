@@ -1,492 +1,534 @@
 package com.Plumbiller.publicaddon.ui;
 
-import net.minecraft.client.gui.DrawContext;
+import meteordevelopment.meteorclient.gui.GuiThemes;
+import meteordevelopment.meteorclient.gui.WidgetScreen;
+import meteordevelopment.meteorclient.gui.widgets.containers.WContainer;
+import meteordevelopment.meteorclient.gui.widgets.containers.WHorizontalList;
+import meteordevelopment.meteorclient.gui.widgets.containers.WSection;
+import meteordevelopment.meteorclient.gui.widgets.containers.WVerticalList;
+import meteordevelopment.meteorclient.gui.widgets.containers.WWindow;
+import meteordevelopment.meteorclient.gui.widgets.input.WDoubleEdit;
+import meteordevelopment.meteorclient.gui.widgets.input.WDropdown;
+import meteordevelopment.meteorclient.gui.widgets.input.WIntEdit;
+import meteordevelopment.meteorclient.gui.widgets.input.WTextBox;
+import meteordevelopment.meteorclient.gui.widgets.pressable.WButton;
+import meteordevelopment.meteorclient.gui.widgets.pressable.WCheckbox;
+import meteordevelopment.meteorclient.gui.widgets.pressable.WMinus;
+import meteordevelopment.meteorclient.gui.widgets.pressable.WPlus;
+import meteordevelopment.meteorclient.settings.*;
+import meteordevelopment.meteorclient.systems.modules.Module;
+import meteordevelopment.meteorclient.systems.modules.Modules;
 import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.text.OrderedText;
-import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
-import net.minecraft.util.Identifier;
-import net.minecraft.client.texture.NativeImage;
-import net.minecraft.client.texture.AbstractTexture;
-import org.lwjgl.glfw.GLFW;
 
-import javax.imageio.ImageIO;
-import java.awt.image.BufferedImage;
+import static meteordevelopment.meteorclient.MeteorClient.mc;
+
 import java.io.BufferedReader;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.lang.reflect.Constructor;
-import java.lang.reflect.Method;
 
-public class ModInfoScreen extends Screen {
+public class ModInfoScreen extends WidgetScreen {
     private final Screen parent;
     private int currentTab = 0;
-
-    private static final Map<Integer, List<FormattedLine>> contentCache = new HashMap<>();
-
-    private static final Map<String, Object> globalImageCache = new HashMap<>();
-
-    private record PixelRect(int x, int y, int width, int height, int color) {
-    }
-
-    private record ImageInfo(Identifier textureId, List<PixelRect> pixels, int width, int height) {
-    }
-
-    public static void preload() {
-        String[] files = { "overview.md", "features.md", "dependencies.md" };
-        for (String file : files) {
-            preloadImagesFrom("/assets/publicaddon/info/" + file);
-        }
-    }
-
-    private static void preloadImagesFrom(String path) {
-        try (InputStream stream = ModInfoScreen.class.getResourceAsStream(path)) {
-            if (stream == null)
-                return;
-            BufferedReader reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8));
-            String line;
-            while ((line = reader.readLine()) != null) {
-                Matcher m = IMAGE_PATTERN.matcher(line);
-                if (m.matches()) {
-                    String cleanPath = m.group(2).toLowerCase(java.util.Locale.ROOT);
-                    if (cleanPath.contains(":"))
-                        cleanPath = cleanPath.split(":")[1];
-                    if (cleanPath.startsWith("/"))
-                        cleanPath = cleanPath.substring(1);
-                    String resourcePath = "/assets/publicaddon/" + cleanPath;
-
-                    getOrLoadImage(resourcePath);
-                }
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    private static ImageInfo getOrLoadImage(String path) {
-        Object cached = globalImageCache.get(path);
-
-        if (cached instanceof ImageInfo) {
-            return (ImageInfo) cached;
-        }
-
-        if (cached instanceof BufferedImage) {
-            return uploadOrConvertImage(path, (BufferedImage) cached);
-        }
-
-        try (InputStream stream = ModInfoScreen.class.getResourceAsStream(path)) {
-            if (stream == null)
-                return null;
-            BufferedImage original = ImageIO.read(stream);
-            if (original == null)
-                return null;
-
-            int origW = original.getWidth();
-            int origH = original.getHeight();
-            int newW = Math.max(origW / 2, Math.min(50, origW));
-            int newH = Math.max(origH / 2, Math.min(50, origH));
-
-            java.awt.Image scaled = original.getScaledInstance(newW, newH, java.awt.Image.SCALE_SMOOTH);
-            BufferedImage result = new BufferedImage(newW, newH, BufferedImage.TYPE_INT_ARGB);
-            java.awt.Graphics2D g = result.createGraphics();
-            g.drawImage(scaled, 0, 0, null);
-            g.dispose();
-
-            globalImageCache.put(path, result);
-            return null;
-        } catch (Exception e) {
-            e.printStackTrace();
-            return null;
-        }
-    }
-
-    private static ImageInfo uploadOrConvertImage(String path, BufferedImage image) {
-        Identifier gpuId = null;
-        try {
-            NativeImage nativeImage = new NativeImage(image.getWidth(), image.getHeight(), true);
-            for (int y = 0; y < image.getHeight(); y++) {
-                for (int x = 0; x < image.getWidth(); x++) {
-                    nativeImage.setColor(x, y, image.getRGB(x, y));
-                }
-            }
-
-            Object dynamicTex = null;
-
-            Class<?> textureClass = null;
-            try {
-                textureClass = Class.forName("net.minecraft.client.texture.NativeImageBackedTexture");
-            } catch (ClassNotFoundException e) {
-                try {
-                    textureClass = Class.forName("net.minecraft.client.texture.DynamicTexture");
-                } catch (ClassNotFoundException ex) {
-                }
-            }
-
-            if (textureClass != null) {
-                Constructor<?> candidate = null;
-                for (Constructor<?> c : textureClass.getConstructors()) {
-                    Class<?>[] types = c.getParameterTypes();
-                    if (types.length == 1 && types[0].isAssignableFrom(NativeImage.class)) {
-                        candidate = c;
-                        break;
-                    }
-                }
-
-                if (candidate != null) {
-                    dynamicTex = candidate.newInstance(nativeImage);
-
-                    try {
-                        Method uploadMethod = textureClass.getMethod("upload");
-                        uploadMethod.invoke(dynamicTex);
-                    } catch (Exception e) {
-                    }
-
-                    Identifier id = Identifier.of("publicaddon", "modinfo_img_" + Math.abs(path.hashCode()));
-
-                    Object textureManager = net.minecraft.client.MinecraftClient.getInstance().getTextureManager();
-                    Method registerMethod = null;
-
-                    for (Method m : textureManager.getClass().getMethods()) {
-                        if (m.getName().equals("registerTexture") || m.getName().equals("method_4616")) {
-                            Class<?>[] pts = m.getParameterTypes();
-                            if (pts.length == 2 && pts[0] == Identifier.class
-                                    && AbstractTexture.class.isAssignableFrom(pts[1])) {
-                                registerMethod = m;
-                                break;
-                            }
-                        }
-                    }
-
-                    if (registerMethod != null) {
-                        registerMethod.invoke(textureManager, id, dynamicTex);
-                        gpuId = id;
-                        System.out.println("ModInfoScreen: GPU texture uploaded: " + id);
-                    }
-                }
-            }
-
-        } catch (Throwable e) {
-            System.out.println("ModInfoScreen: GPU upload failed, falling back to CPU.");
-            e.printStackTrace();
-        }
-
-        if (gpuId != null) {
-            ImageInfo info = new ImageInfo(gpuId, null, image.getWidth(), image.getHeight());
-            globalImageCache.put(path, info);
-            return info;
-        }
-
-        List<PixelRect> optimizedRects = optimizePixels(image);
-        ImageInfo info = new ImageInfo(null, optimizedRects, image.getWidth(), image.getHeight());
-        globalImageCache.put(path, info);
-        return info;
-    }
-
-    private static List<PixelRect> optimizePixels(BufferedImage image) {
-        int width = image.getWidth();
-        int height = image.getHeight();
-
-        List<List<PixelRect>> rows = new ArrayList<>(height);
-
-        for (int y = 0; y < height; y++) {
-            List<PixelRect> rowSegments = new ArrayList<>();
-            int startX = 0;
-            int currentColor = image.getRGB(0, y);
-
-            for (int x = 1; x < width; x++) {
-                int pixel = image.getRGB(x, y);
-                if (pixel != currentColor) {
-                    if ((currentColor >>> 24) != 0) {
-                        rowSegments.add(new PixelRect(startX, y, x - startX, 1, currentColor));
-                    }
-                    startX = x;
-                    currentColor = pixel;
-                }
-            }
-            if ((currentColor >>> 24) != 0) {
-                rowSegments.add(new PixelRect(startX, y, width - startX, 1, currentColor));
-            }
-            rows.add(rowSegments);
-        }
-
-        List<PixelRect> finalRects = new ArrayList<>();
-
-        for (List<PixelRect> row : rows) {
-            for (PixelRect seg : row) {
-                boolean merged = false;
-                for (int i = finalRects.size() - 1; i >= 0; i--) {
-                    PixelRect candidate = finalRects.get(i);
-                    if (candidate.y + candidate.height == seg.y) {
-                        if (candidate.x == seg.x && candidate.width == seg.width && candidate.color == seg.color) {
-                            finalRects.set(i, new PixelRect(candidate.x, candidate.y, candidate.width,
-                                    candidate.height + 1, candidate.color));
-                            merged = true;
-                            break;
-                        }
-                    }
-                    if (candidate.y + candidate.height < seg.y - 1)
-                        break;
-                }
-
-                if (!merged) {
-                    finalRects.add(seg);
-                }
-            }
-        }
-
-        return finalRects;
-    }
-
-    private double scrollOffset = 0;
-    private double maxScroll = 0;
-    private static final int SCROLL_SPEED = 20;
-    private static final int PADDING = 20;
+    private WContainer content;
+    private meteordevelopment.meteorclient.gui.widgets.containers.WView view;
 
     private static final Pattern IMAGE_PATTERN = Pattern.compile("!\\[(.*?)\\]\\((.*?)\\)");
+    private static final Pattern MODULE_PATTERN = Pattern.compile("\\[\\[(.*?)\\]\\]");
+
+    // Track visible settings to detect changes
+    private final java.util.Map<SettingGroup, java.util.List<Setting<?>>> lastVisibleSettings = new java.util.HashMap<>();
+
+    // Saved state for returning from sub-screens
+    private double savedScroll = -1;
 
     public ModInfoScreen(Screen parent) {
-        super(Text.literal("PlumbillerPublic Info"));
+        super(GuiThemes.get(), "PlumbillerPublic Info");
         this.parent = parent;
     }
 
     @Override
-    protected void init() {
-        super.init();
+    public void initWidgets() {
+        WWindow window = super.add(theme.window("PlumbillerPublic Info")).center().minWidth(600).widget();
 
-        int buttonWidth = 100;
-        int buttonHeight = 20;
-        int spacing = 10;
-        int totalWidth = (buttonWidth * 3) + (spacing * 2);
-        int startX = (this.width - totalWidth) / 2;
-        int startY = PADDING;
+        window.clear();
 
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("Overview"), button -> setTab(0))
-                .dimensions(startX, startY, buttonWidth, buttonHeight)
-                .build());
+        // Tabs
+        WHorizontalList tabs = window.add(theme.horizontalList()).expandX().widget();
 
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("Features"), button -> setTab(1))
-                .dimensions(startX + buttonWidth + spacing, startY, buttonWidth, buttonHeight)
-                .build());
+        addTab(tabs, "Overview", 0);
+        addTab(tabs, "Features", 1);
+        addTab(tabs, "Dependencies", 2);
 
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("Dependencies"), button -> setTab(2))
-                .dimensions(startX + (buttonWidth + spacing) * 2, startY, buttonWidth, buttonHeight)
-                .build());
+        window.add(theme.horizontalSeparator()).expandX();
 
-        setTab(currentTab);
+        // Scrollable View
+        view = window.add(theme.view()).expandX().widget();
+        view.hasScrollBar = true;
+        content = view.add(theme.verticalList()).expandX().widget();
+
+        loadTab(currentTab);
+        restoreState();
     }
 
-    private void setTab(int index) {
-        this.currentTab = index;
-        this.scrollOffset = 0;
+    private void addTab(WHorizontalList list, String name, int index) {
+        WButton b = list.add(theme.button(name)).expandX().widget();
+        b.action = () -> loadTab(index);
+    }
 
-        if (!contentCache.containsKey(index)) {
-            String filename = switch (index) {
-                case 1 -> "features.md";
-                case 2 -> "dependencies.md";
-                default -> "overview.md";
-            };
-            loadAndProcessMarkdown(index, "/assets/publicaddon/info/" + filename);
+    private void loadTab(int index) {
+        this.currentTab = index;
+        if (content != null) {
+            content.clear();
         }
 
-        recalculateMaxScroll();
+        String filename = switch (index) {
+            case 1 -> "features.md";
+            case 2 -> "dependencies.md";
+            default -> "overview.md";
+        };
+
+        loadAndProcessMarkdown("/assets/publicaddon/info/" + filename);
     }
 
-    private void loadAndProcessMarkdown(int tabIndex, String path) {
-        List<FormattedLine> lines = new ArrayList<>();
-        int maxWidth = this.width - (PADDING * 2) - 20;
-
+    private void loadAndProcessMarkdown(String path) {
+        if (content == null)
+            return;
         try {
             InputStream stream = getClass().getResourceAsStream(path);
             if (stream == null) {
-                lines.add(new FormattedLine(Text.literal("Error: Could not find " + path).asOrderedText(), null,
-                        0xFFFF0000, 10, 5));
-            } else {
-                BufferedReader reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8));
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    processMarkdownLine(line, lines, maxWidth);
-                }
-                reader.close();
+                content.add(theme.label("Error: Could not find " + path));
+                return;
             }
+            BufferedReader reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8));
+            String line;
+            while ((line = reader.readLine()) != null) {
+                processMarkdownLine(line);
+            }
+            reader.close();
         } catch (Exception e) {
-            lines.add(new FormattedLine(Text.literal("Error loading file: " + e.getMessage()).asOrderedText(), null,
-                    0xFFFF0000, 10, 5));
+            content.add(theme.label("Error loading file: " + e.getMessage()));
             e.printStackTrace();
         }
-
-        contentCache.put(tabIndex, lines);
     }
 
-    private void processMarkdownLine(String line, List<FormattedLine> outputLines, int maxWidth) {
+    private void processMarkdownLine(String line) {
         line = line.trim();
         if (line.isEmpty()) {
-            outputLines.add(new FormattedLine(OrderedText.EMPTY, null, 0, 10, 5));
+            content.add(theme.label("")); // Empty line spacer
             return;
         }
 
         Matcher imageMatcher = IMAGE_PATTERN.matcher(line);
         if (imageMatcher.matches()) {
-            String path = imageMatcher.group(2).toLowerCase(java.util.Locale.ROOT);
-            String cleanPath = path;
-            if (cleanPath.contains(":"))
-                cleanPath = cleanPath.split(":")[1];
-            if (cleanPath.startsWith("/"))
-                cleanPath = cleanPath.substring(1);
-            String resourcePath = "/assets/publicaddon/" + cleanPath;
-
-            ImageInfo info = getOrLoadImage(resourcePath);
-
-            if (info != null) {
-                int displayWidth = Math.min(maxWidth > 50 ? maxWidth : 350, info.width);
-                float aspectRatio = (float) info.height / info.width;
-                int displayHeight = (int) (displayWidth * aspectRatio);
-
-                outputLines.add(new FormattedLine(null, resourcePath, 0xFFFFFFFF, displayHeight, 10));
-            } else {
-                outputLines.add(new FormattedLine(Text.literal("[Image pending: " + resourcePath + "]").asOrderedText(),
-                        null, 0xFFFF0000, 20, 5));
-            }
+            // Skip images
             return;
         }
 
-        int color = 0xFF000000;
-        boolean bold = false;
-        int extraSpacing = 2;
         String text = line;
 
-        if (text.startsWith("# ")) {
-            color = 0xFF2222DD;
-            bold = true;
-            text = text.substring(2);
-            extraSpacing = 10;
-        } else if (text.startsWith("## ")) {
-            color = 0xFF444444;
-            bold = true;
-            text = text.substring(3);
-            extraSpacing = 5;
-        } else if (text.startsWith("### ")) {
-            color = 0xFF666666;
-            bold = true;
-            text = text.substring(4);
-            extraSpacing = 3;
-        } else if (text.startsWith("* ") || text.startsWith("- ")) {
-            text = "• " + text.substring(2);
-        }
-
-        text = text.replace("**", "");
-
-        net.minecraft.text.MutableText mutableText = Text.literal(text);
-        if (bold)
-            mutableText.formatted(Formatting.BOLD);
-
-        List<OrderedText> wrapped = this.textRenderer.wrapLines(mutableText, maxWidth);
-
-        for (int i = 0; i < wrapped.size(); i++) {
-            outputLines.add(new FormattedLine(wrapped.get(i), null, color, this.textRenderer.fontHeight,
-                    i == wrapped.size() - 1 ? extraSpacing : 2));
-        }
-    }
-
-    private void recalculateMaxScroll() {
-        if (!contentCache.containsKey(currentTab))
+        // Check for dynamic module injection [[ModuleName]]
+        Matcher moduleMatcher = MODULE_PATTERN.matcher(text);
+        if (moduleMatcher.find()) {
+            String moduleName = moduleMatcher.group(1);
+            injectSettingsForModule(moduleName);
             return;
-        List<FormattedLine> lines = contentCache.get(currentTab);
-
-        int totalHeight = 0;
-        for (FormattedLine line : lines) {
-            totalHeight += line.height + line.spacing;
         }
 
-        int viewportHeight = this.height - (PADDING + 40 + PADDING) - 20;
-        this.maxScroll = Math.max(0, totalHeight - viewportHeight);
+        // Standard markdown rendering
+        int maxWidth = maxWidth();
+
+        if (text.startsWith("# ")) {
+            content.add(theme.label(text.substring(2))).expandX();
+            content.add(theme.horizontalSeparator()).expandX();
+        } else if (text.startsWith("## ")) {
+            addWrappedLabel(text.substring(3), maxWidth);
+        } else if (text.startsWith("### ")) {
+            addWrappedLabel(text.substring(4), maxWidth);
+        } else if (text.startsWith("* ") || text.startsWith("- ")) {
+            addWrappedLabel("• " + text.substring(2), maxWidth);
+        } else {
+            addWrappedLabel(text, maxWidth);
+        }
     }
 
-    @Override
-    public void render(DrawContext context, int mouseX, int mouseY, float delta) {
-        this.renderBackground(context, mouseX, mouseY, delta);
-        super.render(context, mouseX, mouseY, delta);
+    private int maxWidth() {
+        return Math.min(this.width - 80, 1000);
+    }
 
-        int contentTop = PADDING + 40;
-        int contentBottom = this.height - PADDING;
-        int contentLeft = PADDING;
-        int contentRight = this.width - PADDING;
+    private void addWrappedLabel(String text, int maxWidth) {
+        if (client == null || client.textRenderer == null) {
+            content.add(theme.label(text)).expandX();
+            return;
+        }
 
-        context.fill(contentLeft, contentTop, contentRight, contentBottom, 0xFFFFFFFF);
-        context.drawBorder(contentLeft, contentTop, contentRight - contentLeft, contentBottom - contentTop, 0xFF000000);
+        String[] words = text.split(" ");
+        StringBuilder currentLine = new StringBuilder();
 
-        context.enableScissor(contentLeft + 2, contentTop + 2, contentRight - 2, contentBottom - 2);
-
-        List<FormattedLine> lines = contentCache.get(currentTab);
-        if (lines != null) {
-            int y = (int) (contentTop + 10 - scrollOffset);
-
-            for (FormattedLine line : lines) {
-                if (y + line.height > contentTop && y < contentBottom) {
-                    if (line.imagePath != null) {
-                        ImageInfo info = getOrLoadImage(line.imagePath);
-                        if (info != null) {
-                            int displayWidth = Math.min(contentRight - contentLeft - 20, info.width);
-                            int displayHeight = line.height;
-                            int startX = contentLeft + (contentRight - contentLeft - displayWidth) / 2;
-
-                            if (info.textureId != null) {
-                                context.drawTexturedQuad(info.textureId, startX, y, displayWidth, displayHeight, 0f, 0f,
-                                        1f, 1f);
-                            } else if (info.pixels != null) {
-                                float scaleX = (float) displayWidth / info.width;
-                                float scaleY = (float) displayHeight / info.height;
-
-                                for (PixelRect r : info.pixels) {
-                                    int px = startX + (int) (r.x * scaleX);
-                                    int py = y + (int) (r.y * scaleY);
-                                    int pw = (int) Math.max(1, r.width * scaleX);
-                                    int ph = (int) Math.max(1, r.height * scaleY);
-
-                                    if (py + ph < contentTop || py > contentBottom)
-                                        continue;
-
-                                    context.fill(px, py, px + pw, py + ph, r.color);
-                                }
-                            }
-                        }
-                    } else if (line.text != null) {
-                        context.drawText(this.textRenderer, line.text, contentLeft + 10, y, line.color, false);
-                    }
+        for (String word : words) {
+            String testLine = currentLine.length() > 0 ? currentLine + " " + word : word;
+            if (client.textRenderer.getWidth(testLine) > maxWidth) {
+                if (currentLine.length() > 0) {
+                    content.add(theme.label(currentLine.toString())).expandX();
                 }
-
-                y += line.height + line.spacing;
+                currentLine = new StringBuilder(word);
+            } else {
+                currentLine = new StringBuilder(testLine);
             }
         }
 
-        context.disableScissor();
-    }
-
-    @Override
-    public void renderBackground(DrawContext context, int mouseX, int mouseY, float delta) {
-        context.fillGradient(0, 0, this.width, this.height, 0xC0101010, 0xD0101010);
-    }
-
-    @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
-        this.scrollOffset = Math.max(0, Math.min(maxScroll, scrollOffset - (verticalAmount * SCROLL_SPEED)));
-        return true;
-    }
-
-    @Override
-    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        if (keyCode == GLFW.GLFW_KEY_E) {
-            this.close();
-            return true;
+        if (currentLine.length() > 0) {
+            content.add(theme.label(currentLine.toString())).expandX();
         }
-        return super.keyPressed(keyCode, scanCode, modifiers);
+    }
+
+    private void injectSettingsForModule(String moduleName) {
+        // Clean up name (remove potential file extensions if user included them)
+        if (moduleName.endsWith(".java"))
+            moduleName = moduleName.substring(0, moduleName.length() - 5);
+        if (moduleName.endsWith(".class"))
+            moduleName = moduleName.substring(0, moduleName.length() - 6);
+
+        // Find module by simple name
+        for (Module module : Modules.get().getAll()) {
+            if (module.getClass().getSimpleName().equalsIgnoreCase(moduleName)) {
+                injectModuleSettings(module.getClass());
+                return;
+            }
+        }
+        content.add(theme.label("Module not found: " + moduleName));
+    }
+
+    // Track sections if needed
+    private final Map<SettingGroup, WSection> sectionMap = new HashMap<>();
+
+    private void injectModuleSettings(Class<? extends Module> moduleClass) {
+        Module module = Modules.get().get(moduleClass);
+        if (module != null) {
+            sectionMap.clear();
+            lastVisibleSettings.clear();
+
+            content.add(theme.horizontalSeparator()).expandX();
+            content.add(theme.label(module.name + " Configuration")).expandX();
+
+            for (SettingGroup group : module.settings) {
+                // Create the section
+                WSection section = content.add(theme.section(group.name)).expandX().widget();
+                section.setExpanded(true);
+                sectionMap.put(group, section);
+
+                List<Setting<?>> visibleSettings = new java.util.ArrayList<>();
+                for (Setting<?> setting : group) {
+                    if (setting.isVisible()) {
+                        addSettingWidget(section, setting, group);
+                        visibleSettings.add(setting);
+                    }
+                }
+                lastVisibleSettings.put(group, visibleSettings);
+            }
+
+            content.add(theme.horizontalSeparator()).expandX();
+        } else {
+            content.add(theme.label("Module not found: " + moduleClass.getSimpleName()));
+        }
+    }
+
+    private void triggerReload() {
+        if (view == null)
+            return;
+
+        // Save scroll position using reflection
+        double storedScroll = 0;
+        try {
+            Class<?> clazz = view.getClass();
+            while (clazz != null) {
+                try {
+                    java.lang.reflect.Field f = clazz.getDeclaredField("scroll");
+                    f.setAccessible(true);
+                    storedScroll = f.getDouble(view);
+                    break;
+                } catch (NoSuchFieldException e) {
+                    clazz = clazz.getSuperclass();
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        loadTab(currentTab);
+
+        // Restore scroll position using reflection
+        try {
+            Class<?> clazz = view.getClass();
+            while (clazz != null) {
+                try {
+                    java.lang.reflect.Field f = clazz.getDeclaredField("scroll");
+                    f.setAccessible(true);
+                    f.setDouble(view, storedScroll);
+                    view.invalidate(); // Force layout update
+                    return;
+                } catch (NoSuchFieldException e) {
+                    clazz = clazz.getSuperclass();
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void storeState() {
+        if (view != null) {
+            try {
+                Class<?> clazz = view.getClass();
+                while (clazz != null) {
+                    try {
+                        java.lang.reflect.Field f = clazz.getDeclaredField("scroll");
+                        f.setAccessible(true);
+                        savedScroll = f.getDouble(view);
+                        return;
+                    } catch (NoSuchFieldException e) {
+                        clazz = clazz.getSuperclass();
+                    }
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    private void restoreState() {
+        if (savedScroll != -1 && view != null) {
+            try {
+                Class<?> clazz = view.getClass();
+                while (clazz != null) {
+                    try {
+                        java.lang.reflect.Field f = clazz.getDeclaredField("scroll");
+                        f.setAccessible(true);
+                        f.setDouble(view, savedScroll);
+                        view.invalidate();
+                        savedScroll = -1; // Reset after restoring
+                        return;
+                    } catch (NoSuchFieldException e) {
+                        clazz = clazz.getSuperclass();
+                    }
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    // Callback adapter
+    private void triggerReload(SettingGroup group) {
+        triggerReload();
+    }
+
+    @Override
+    public void tick() {
+        super.tick();
+
+        boolean needsRefresh = false;
+
+        // Check for visibility changes
+        for (Map.Entry<SettingGroup, List<Setting<?>>> entry : lastVisibleSettings.entrySet()) {
+            SettingGroup group = entry.getKey();
+            List<Setting<?>> lastVisible = entry.getValue();
+
+            List<Setting<?>> currentVisible = new java.util.ArrayList<>();
+            for (Setting<?> setting : group) {
+                if (setting.isVisible()) {
+                    currentVisible.add(setting);
+                }
+            }
+
+            if (!lastVisible.equals(currentVisible)) {
+                needsRefresh = true;
+                break;
+            }
+        }
+
+        if (needsRefresh) {
+            triggerReload();
+        }
+    }
+
+    private void addSettingWidget(WContainer parent, Setting<?> setting, SettingGroup group) {
+        WHorizontalList row = parent.add(theme.horizontalList()).expandX().widget();
+        row.add(theme.label(formatSettingName(setting.name)));
+
+        if (setting instanceof BoolSetting bs) {
+            WCheckbox checkbox = row.add(theme.checkbox(bs.get())).expandCellX().widget();
+            checkbox.action = () -> {
+                bs.set(checkbox.checked);
+                triggerReload(group);
+            };
+            row.add(theme.label("")).expandX();
+            addResetButton(row, setting, group);
+
+        } else if (setting instanceof IntSetting is) {
+            // Use the setting's sliderMin/sliderMax for the slider range
+            int sliderMin = is.sliderMin;
+            int sliderMax = is.sliderMax;
+            boolean noSlider = (sliderMin == 0 && sliderMax == 0);
+
+            WIntEdit edit = row.add(theme.intEdit(
+                    is.get(), // current value
+                    is.min, // min value (for validation)
+                    is.max, // max value (for validation)
+                    sliderMin, // slider min (from .sliderRange())
+                    sliderMax, // slider max (from .sliderRange())
+                    noSlider // noSlider flag
+            )).minWidth(100).expandCellX().widget();
+
+            edit.action = () -> is.set(edit.get());
+            edit.actionOnRelease = () -> {
+                is.set(edit.get());
+                triggerReload(group);
+            };
+            row.add(theme.label("")).expandX();
+            addResetButton(row, setting, group);
+
+        } else if (setting instanceof DoubleSetting ds) {
+            // Use the setting's sliderMin/sliderMax for the slider range
+            double sliderMin = ds.sliderMin;
+            double sliderMax = ds.sliderMax;
+            boolean noSlider = (sliderMin == 0 && sliderMax == 0);
+
+            WDoubleEdit edit = row.add(theme.doubleEdit(
+                    ds.get(), // current value
+                    ds.min, // min value (for validation)
+                    ds.max, // max value (for validation)
+                    sliderMin, // slider min (from .sliderRange())
+                    sliderMax, // slider max (from .sliderRange())
+                    ds.decimalPlaces, // decimal places
+                    noSlider // noSlider flag
+            )).minWidth(100).expandCellX().widget();
+
+            edit.action = () -> ds.set(edit.get());
+            edit.actionOnRelease = () -> {
+                ds.set(edit.get());
+                triggerReload(group);
+            };
+            row.add(theme.label("")).expandX();
+            addResetButton(row, setting, group);
+
+        } else if (setting instanceof StringSetting ss) {
+            WTextBox textBox = row.add(theme.textBox(ss.get())).minWidth(100).expandCellX().widget();
+            textBox.action = () -> ss.set(textBox.get());
+            textBox.actionOnUnfocused = () -> {
+                ss.set(textBox.get());
+                triggerReload(group);
+            };
+            row.add(theme.label("")).expandX();
+            addResetButton(row, setting, group);
+
+        } else if (setting instanceof EnumSetting<?> es) {
+            Object[] enumValues = es.get().getClass().getEnumConstants();
+            if (enumValues != null) {
+                WDropdown<Object> dropdown = row.add(theme.dropdown(enumValues, es.get())).expandCellX().widget();
+                dropdown.action = () -> {
+                    setEnumUntyped(es, dropdown.get());
+                    triggerReload(group);
+                };
+            }
+            row.add(theme.label("")).expandX();
+            addResetButton(row, setting, group);
+
+        } else if (setting instanceof ColorSetting cs) {
+            // Add color preview quad
+            row.add(theme.quad(cs.get())).widget();
+
+            // Add edit button to open color picker
+            WButton edit = row.add(theme.button("Edit")).widget();
+            edit.action = () -> {
+                storeState();
+                mc.setScreen(new meteordevelopment.meteorclient.gui.screens.settings.ColorSettingScreen(theme, cs));
+            };
+
+            row.add(theme.label("")).expandX();
+            addResetButton(row, setting, group);
+
+        } else if (setting instanceof StringListSetting sls) {
+            row.add(theme.label("")).expandX();
+            addResetButton(row, setting, group);
+
+            // Nested list for items
+            WVerticalList list = parent.add(theme.verticalList()).expandX().widget();
+            for (int i = 0; i < sls.get().size(); i++) {
+                int index = i;
+                WHorizontalList itemRow = list.add(theme.horizontalList()).expandX().widget();
+                WTextBox box = itemRow.add(theme.textBox(sls.get().get(i))).minWidth(100).expandX().widget();
+                box.action = () -> {
+                    if (index < sls.get().size()) {
+                        sls.get().set(index, box.get());
+                    }
+                };
+
+                WMinus remove = itemRow.add(theme.minus()).widget();
+                remove.action = () -> {
+                    if (index < sls.get().size()) {
+                        sls.get().remove(index);
+                    }
+                };
+            }
+            WHorizontalList addRow = list.add(theme.horizontalList()).expandX().widget();
+            WPlus add = addRow.add(theme.plus()).widget();
+            add.action = () -> sls.get().add("");
+
+        } else if (setting instanceof ItemListSetting ils) {
+            WButton select = row.add(theme.button("Select")).expandCellX().widget();
+            select.action = () -> {
+                storeState();
+                mc.setScreen(new meteordevelopment.meteorclient.gui.screens.settings.ItemListSettingScreen(theme, ils));
+            };
+            row.add(theme.label("")).expandX();
+            addResetButton(row, setting, group);
+
+        } else {
+            row.add(theme.label(setting.get().toString())).expandCellX();
+            row.add(theme.label("")).expandX();
+            addResetButton(row, setting, group);
+        }
+    }
+
+    private void addResetButton(WHorizontalList row, Setting<?> setting, SettingGroup group) {
+        WButton reset = row.add(theme.button("Reset")).widget();
+        reset.action = () -> {
+            setting.reset();
+            triggerReload(group);
+        };
+        reset.tooltip = "Reset to default";
+    }
+
+    private String formatSettingName(String name) {
+        // Convert "some-setting-name" to "Some Setting Name"
+        StringBuilder result = new StringBuilder();
+        boolean capitalizeNext = true;
+
+        for (char c : name.toCharArray()) {
+            if (c == '-' || c == '_') {
+                result.append(' ');
+                capitalizeNext = true;
+            } else if (capitalizeNext) {
+                result.append(Character.toUpperCase(c));
+                capitalizeNext = false;
+            } else {
+                result.append(c);
+            }
+        }
+
+        return result.toString();
+    }
+
+    @SuppressWarnings({ "unchecked", "rawtypes" })
+    private void setEnumUntyped(EnumSetting setting, Object value) {
+        if (value != null)
+            setting.set((Enum) value);
     }
 
     @Override
@@ -494,8 +536,5 @@ public class ModInfoScreen extends Screen {
         if (client != null) {
             client.setScreen(parent);
         }
-    }
-
-    private record FormattedLine(OrderedText text, String imagePath, int color, int height, int spacing) {
     }
 }
