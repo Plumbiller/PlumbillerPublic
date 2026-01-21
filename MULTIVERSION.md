@@ -62,7 +62,7 @@ To add support for a new Minecraft version:
 
 ## Code Compatibility (`MultiVersionCompat`)
 
-Since different Minecraft versions have different obfuscated names or API changes (e.g., `getWorld` vs `getEntityWorld`), this project uses a utility class `com.Plumbiller.publicaddon.util.MultiVersionCompat`.
+Since different Minecraft versions have different obfuscated names or API changes (e.g., `getWorld` vs `getEntityWorld`), this project uses a utility class `com.Plumbiller.publicaddon.util.MultiVersionCompat`. IF you are planning to add something similar to your own mod:
 
 **Do not call these methods directly:**
 - `GameProfile.getName()`
