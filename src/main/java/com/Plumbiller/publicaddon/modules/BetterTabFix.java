@@ -114,6 +114,13 @@ public class BetterTabFix extends Module {
             .defaultValue(true)
             .build());
 
+    public final Setting<ScrollMode> scrollMode = sgGeneral.add(new EnumSetting.Builder<ScrollMode>()
+            .name("scroll-mode")
+            .description("How the scrolling should function.")
+            .defaultValue(ScrollMode.OneByOne)
+            .visible(scrollableTab::get)
+            .build());
+
     private final Setting<Boolean> gamemode = sgGeneral.add(new BoolSetting.Builder()
             .name("gamemode")
             .description("Display gamemode next to the nick.")
@@ -205,14 +212,25 @@ public class BetterTabFix extends Module {
             return;
 
         if (mc.options.playerListKey.isPressed()) {
+            int step = 1;
+            switch (scrollMode.get()) {
+                case ByColumns -> step = tabHeight.get();
+                case FullTab -> step = tabSize.get();
+                default -> step = 1;
+            }
+
             if (event.value > 0) {
                 if (scrollOffset > 0) {
-                    scrollOffset--;
+                    scrollOffset -= step;
+                    if (scrollOffset < 0)
+                        scrollOffset = 0;
                 }
             } else if (event.value < 0) {
                 int maxOffset = Math.max(0, totalPlayerCount - tabSize.get());
                 if (scrollOffset < maxOffset) {
-                    scrollOffset++;
+                    scrollOffset += step;
+                    if (scrollOffset > maxOffset)
+                        scrollOffset = maxOffset;
                 }
             }
             event.cancel();
@@ -401,5 +419,22 @@ public class BetterTabFix extends Module {
         }
 
         return name;
+    }
+
+    public enum ScrollMode {
+        OneByOne("One by one"),
+        ByColumns("By columns"),
+        FullTab("Full tab");
+
+        private final String title;
+
+        ScrollMode(String title) {
+            this.title = title;
+        }
+
+        @Override
+        public String toString() {
+            return title;
+        }
     }
 }
