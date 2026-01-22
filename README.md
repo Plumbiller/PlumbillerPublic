@@ -86,6 +86,20 @@ If the auto accept config is enabled and the module detects a trusted player tel
 ### Smart Priority
 * If a player matches multiple roles (e.g., Prime and Friend), the module picks the highest priority role according to your hierarchy settings.
 
+## Skin Flicker
+Toggle your skin layers rapidly for a cool skin effect.
+This is a module I that as far as I know is only available for paid clients, such as Mio Client, which in my opinion is a waste of money.
+I hope everyone will use this feature and realize that paid clients suck. In fact I think my module adds more customization options than any paid client. Open source FTW!
+
+![Skin Flicker](src/main/resources/assets/publicaddon/docs_assets/SkinFlicker-Plumbiller.gif)
+
+
+- Choose between Horizontal, Vertical, or Random flicker modes.
+- Customize the direction: Left -> Right / Right -> Left or Top -> Bottom / Bottom -> Top.
+- Select how many parts to flicker at once: One by One, Multiple Parts, or All Simultaneously.
+- Fully configurable delays and randomization options.
+- Respects your existing skin customization settings (e.g., if your cape is disabled, it won't flicker).
+
 # Dependencies
 
 * **Minecraft** 

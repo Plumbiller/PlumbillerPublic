@@ -96,3 +96,19 @@ Auto accept will always take 10 seconds to execute, just in case.
 
 &eSmart Priority
 - If a player matches multiple roles (e.g., Prime and Friend), the module picks the highest priority role according to your hierarchy settings.
+
+&6Skin Flicker
+Toggle your skin layers rapidly for a cool skin effect.
+This is a module I that as far as I know is only available for paid clients, such as Mio Client, which in my opinion is a waste of money.
+I hope everyone will use this feature and realize that paid clients suck. In fact I think my module adds more customization options than any
+paid client. Open source FTW!
+
+[[SkinFlicker]]
+
+- Choose between Horizontal, Vertical, or Random flicker modes.
+- Customize the direction: Left -> Right / Right -> Left or Top -> Bottom / Bottom -> Top.
+- Select how many parts to flicker at once: One by One, Multiple Parts, or All Simultaneously.
+- Fully configurable delays and randomization options.
+- Respects your existing skin customization settings (e.g., if your cape is disabled, it won't flicker).
+
+
