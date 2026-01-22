@@ -2,7 +2,7 @@
 
 ### Meteor Client Addon
 
-PlumbillerPublic is a Public meteor client addon created by Plumbiller. It's a work in progress, so expect some bugs and missing features which will be added and solved eventually.
+PlumbillerPublic is a Public meteor client addon created by Plumbiller. The addon is in active development.
 
 ## Cumtributing
 
