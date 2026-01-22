@@ -13,10 +13,8 @@ import org.spongepowered.asm.mixin.injection.ModifyConstant;
 import org.spongepowered.asm.mixin.injection.ModifyVariable;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-import com.mojang.authlib.GameProfile;
 import java.util.Comparator;
 import java.util.List;
-import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Mixin(PlayerListHud.class)
@@ -65,22 +63,6 @@ public class BetterTabFixMixin {
                     .limit(limit)
                     .collect(Collectors.toList());
 
-            int rows = module.tabHeight.get();
-            if (rows > 0 && !list.isEmpty()) {
-                int cols = (list.size() + rows - 1) / rows;
-                int targetSize = cols * rows;
-                int needed = targetSize - list.size();
-
-                if (needed > 0) {
-                    try {
-                        PlayerListEntry dummy = new PlayerListEntry(new GameProfile(UUID.randomUUID(), "   "), false);
-                        for (int i = 0; i < needed; i++) {
-                            list.add(dummy);
-                        }
-                    } catch (Throwable e) {
-                    }
-                }
-            }
             return list;
         }
         return visibleEntries;
