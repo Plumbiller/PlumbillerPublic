@@ -1,4 +1,6 @@
 
+DeployAllVersions.bat
+
 .gradle/
 build/
 out/

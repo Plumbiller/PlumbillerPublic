@@ -4,9 +4,14 @@ plugins {
     alias(libs.plugins.fabric.loom)
 }
 
+val mcVer = project.findProperty("mcVer") as? String ?: libs.versions.minecraft.get()
+val yarnVer = project.findProperty("yarnVer") as? String ?: libs.versions.yarn.mappings.get()
+val meteorVer = project.findProperty("meteorVer") as? String ?: libs.versions.meteor.get()
+
 base {
     archivesName = properties["archives_base_name"] as String
-    version = properties["mod_version"] as String
+    val rawVersion = properties["mod_version"] as String
+    version = rawVersion.replace("{mc_version}", mcVer)
     group = properties["maven_group"] as String
 }
 
@@ -26,9 +31,7 @@ repositories {
     mavenCentral()
 }
 
-val mcVer = project.findProperty("mcVer") as? String ?: libs.versions.minecraft.get()
-val yarnVer = project.findProperty("yarnVer") as? String ?: libs.versions.yarn.mappings.get()
-val meteorVer = project.findProperty("meteorVer") as? String ?: libs.versions.meteor.get()
+
 
 dependencies {
     minecraft("com.mojang:minecraft:$mcVer")
