@@ -10,7 +10,8 @@ import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import meteordevelopment.meteorclient.commands.Command;
-import meteordevelopment.meteorclient.commands.arguments.PlayerListEntryArgumentType;
+import com.Plumbiller.publicaddon.util.MultiVersionCompat;
+
 import meteordevelopment.meteorclient.systems.modules.Modules;
 import net.minecraft.client.network.ServerInfo;
 import net.minecraft.command.CommandSource;
@@ -50,11 +51,18 @@ public class restrictedarea extends Command {
 
         builder.then(literal("allow")
                 .then(argument("area", RestrictedAreaArgumentType.create())
-                        .then(argument("player", PlayerListEntryArgumentType.create())
+                        .then(argument("player", StringArgumentType.word())
+                                .suggests((context, suggestionsBuilder) -> {
+                                    if (mc.getNetworkHandler() != null) {
+                                        return CommandSource.suggestMatching(mc.getNetworkHandler().getPlayerList()
+                                                .stream().map(p -> MultiVersionCompat.getProfileName(p.getProfile())),
+                                                suggestionsBuilder);
+                                    }
+                                    return suggestionsBuilder.buildFuture();
+                                })
                                 .executes(context -> {
                                     String area = RestrictedAreaArgumentType.get(context);
-                                    String player = com.Plumbiller.publicaddon.util.MultiVersionCompat
-                                            .getProfileName(PlayerListEntryArgumentType.get(context).getProfile());
+                                    String player = context.getArgument("player", String.class);
                                     return allowPlayer(player, area);
                                 }))));
 
