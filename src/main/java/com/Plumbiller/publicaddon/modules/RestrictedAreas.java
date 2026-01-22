@@ -11,6 +11,7 @@ import meteordevelopment.meteorclient.settings.ColorSetting;
 import meteordevelopment.meteorclient.settings.Setting;
 import meteordevelopment.meteorclient.settings.SettingGroup;
 import meteordevelopment.meteorclient.settings.DoubleSetting;
+import meteordevelopment.meteorclient.settings.IntSetting;
 import meteordevelopment.meteorclient.settings.StringSetting;
 import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.utils.render.color.Color;
@@ -93,10 +94,43 @@ public class RestrictedAreas extends Module {
             .visible(renderArea::get)
             .build());
 
+    private final Setting<Integer> unrenderDistance = sgRender.add(new IntSetting.Builder()
+            .name("unrender-chunks-distance")
+            .description("Unrenders lines that are further than this distance in chunks.")
+            .defaultValue(8)
+            .min(1)
+            .max(16)
+            .sliderMin(1)
+            .sliderMax(16)
+            .visible(renderArea::get)
+            .build());
+
     private final Setting<SettingColor> boundaryColor = sgRender.add(new ColorSetting.Builder()
             .name("boundary-color")
             .description("Color of the area boundary faces.")
             .defaultValue(new SettingColor(255, 180, 0, 80))
+            .visible(renderArea::get)
+            .build());
+
+    private final Setting<Double> borderThreshold = sgRender.add(new DoubleSetting.Builder()
+            .name("distance-to-border")
+            .description("Distance threshold to render the border faces.")
+            .defaultValue(3.0)
+            .min(1.0)
+            .max(10.0)
+            .sliderMin(1.0)
+            .sliderMax(10.0)
+            .visible(renderArea::get)
+            .build());
+
+    private final Setting<Double> borderSize = sgRender.add(new DoubleSetting.Builder()
+            .name("border-size")
+            .description("Size of the rendered border faces.")
+            .defaultValue(4.0)
+            .min(1.0)
+            .max(10.0)
+            .sliderMin(1.0)
+            .sliderMax(10.0)
             .visible(renderArea::get)
             .build());
 
@@ -584,10 +618,22 @@ public class RestrictedAreas extends Module {
                     boundaryColor.get().b,
                     (int) (boundaryColor.get().a * alphaMultiplier));
 
-            event.renderer.box(minX, minY, minZ, maxX, maxY, maxZ, lineCol, lineCol, ShapeMode.Lines, 2);
+            double closestX = Math.max(minX, Math.min(playerX, maxX));
+            double closestY = Math.max(minY, Math.min(playerY, maxY));
+            double closestZ = Math.max(minZ, Math.min(playerZ, maxZ));
 
-            double threshold = 3.0;
-            double renderSize = 4.0;
+            double distSq = (playerX - closestX) * (playerX - closestX) +
+                    (playerY - closestY) * (playerY - closestY) +
+                    (playerZ - closestZ) * (playerZ - closestZ);
+
+            double maxDist = unrenderDistance.get() * 16.0;
+
+            if (distSq <= maxDist * maxDist) {
+                event.renderer.box(minX, minY, minZ, maxX, maxY, maxZ, lineCol, lineCol, ShapeMode.Lines, 2);
+            }
+
+            double threshold = borderThreshold.get();
+            double renderSize = borderSize.get();
 
             double distToMinX = Math.abs(playerX - minX);
             double distToMaxX = Math.abs(playerX - maxX);
