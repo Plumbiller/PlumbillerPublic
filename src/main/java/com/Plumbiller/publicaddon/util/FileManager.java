@@ -10,9 +10,11 @@ import java.nio.file.Path;
 public class FileManager {
     private static final String ADDON_FOLDER_NAME = "PlumbillerAddon";
     private static final String RESTRICTED_AREAS_FILE = "restricted_areas.json";
+    private static final String IGNORED_PLAYERS_FILE = "IgnoredPlayers.txt";
 
     private static Path addonFolder;
     private static Path restrictedAreasFile;
+    private static Path ignoredPlayersFile;
 
     public static void initialize() {
         try {
@@ -30,6 +32,13 @@ public class FileManager {
                 Files.createFile(restrictedAreasFile);
                 Files.writeString(restrictedAreasFile, "[]");
                 Main.LOG.info("Restricted areas file created: {}", restrictedAreasFile.toAbsolutePath());
+            }
+
+            ignoredPlayersFile = addonFolder.resolve(IGNORED_PLAYERS_FILE);
+
+            if (!Files.exists(ignoredPlayersFile)) {
+                Files.createFile(ignoredPlayersFile);
+                Main.LOG.info("Ignored players file created: {}", ignoredPlayersFile.toAbsolutePath());
             }
 
             Main.LOG.info("FileManager initialized successfully");
@@ -51,6 +60,13 @@ public class FileManager {
             initialize();
         }
         return restrictedAreasFile;
+    }
+
+    public static Path getIgnoredPlayersFile() {
+        if (ignoredPlayersFile == null) {
+            initialize();
+        }
+        return ignoredPlayersFile;
     }
 
     public static String readRestrictedAreas() {

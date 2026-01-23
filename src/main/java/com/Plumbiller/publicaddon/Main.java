@@ -1,5 +1,6 @@
 package com.Plumbiller.publicaddon;
 
+import com.Plumbiller.publicaddon.commands.IgnoreCommand;
 import com.Plumbiller.publicaddon.commands.restrictedarea;
 import com.Plumbiller.publicaddon.hud.RestrictedArea;
 import com.Plumbiller.publicaddon.modules.*;
@@ -34,8 +35,10 @@ public class Main extends MeteorAddon {
         Modules.get().add(new BetterTabFix());
         Modules.get().add(new SkinFlicker());
         Modules.get().add(new WhisperLogger());
+        Modules.get().add(new Ignore());
 
         Commands.add(new restrictedarea());
+        Commands.add(new IgnoreCommand());
 
         Hud.get().register(RestrictedArea.INFO);
     }
