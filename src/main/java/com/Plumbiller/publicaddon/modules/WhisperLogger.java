@@ -71,19 +71,14 @@ public class WhisperLogger extends Module {
     @EventHandler
     private void onMessage(ReceiveMessageEvent event) {
         String message = event.getMessage().getString();
-
-        // Check for received whisper
         if (checkAndLog(message, receiveFormat.get(), true)) {
             return;
         }
-
-        // Check for sent whisper
         checkAndLog(message, sendFormat.get(), false);
     }
 
     private boolean checkAndLog(String content, String format, boolean isReceive) {
         try {
-            // Escape the format string to create a regex, but preserve our placeholders
             String regex = "^" + Pattern.quote(format)
                     .replace("{player}", "\\E(?<player>.*?)\\Q")
                     .replace("{message}", "\\E(?<message>.*?)\\Q") + "$";
@@ -102,12 +97,10 @@ public class WhisperLogger extends Module {
 
                 String sender = isReceive ? otherPlayer : myName;
 
-
                 logHtml(otherPlayer, sender, messageContent);
                 return true;
             }
         } catch (Exception e) {
-            // In case of regex errors or other issues
         }
         return false;
     }
