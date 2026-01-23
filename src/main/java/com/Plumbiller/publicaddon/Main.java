@@ -33,6 +33,7 @@ public class Main extends MeteorAddon {
         Modules.get().add(new RestrictedAreas());
         Modules.get().add(new BetterTabFix());
         Modules.get().add(new SkinFlicker());
+        Modules.get().add(new WhisperLogger());
 
         Commands.add(new restrictedarea());
 
