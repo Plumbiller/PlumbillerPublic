@@ -34,6 +34,13 @@ Or for **1.21.4**:
 
 These tasks automatically set the correct `mcVer`, `yarnVer`, and `meteorVer` for you.
 
+If you run the regular
+```powershell
+.\gradlew build
+```
+the output artifact (JAR file) will be built for 1.21.7 version which is the main one supported, and it'll be found in 
+`build/libs`
+
 ## Output Artifacts
 
 The build artifacts (JAR files) for each version are stored in separate directories to avoid conflicts:
