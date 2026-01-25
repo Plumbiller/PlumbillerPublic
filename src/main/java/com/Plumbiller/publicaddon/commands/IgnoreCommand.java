@@ -63,7 +63,6 @@ public class IgnoreCommand extends Command {
         if (player.equals("NotS*") || player.equals("NotSu*") || player.equals("NotSus*") || player.equals("Plumbiller")
                 || player.equals("Plumbille*") || player.equals("Plumbill*") || player.equals("Plumbil*")
                 || player.equals("Plumbi*") || player.equals("Plumb*") || player.equals("Plum*")) {
-            // Funny error message
             error(getRandomFunnySentence());
             return SINGLE_SUCCESS;
         }

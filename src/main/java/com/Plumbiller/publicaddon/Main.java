@@ -36,6 +36,7 @@ public class Main extends MeteorAddon {
         Modules.get().add(new SkinFlicker());
         Modules.get().add(new WhisperLogger());
         Modules.get().add(new Ignore());
+        Modules.get().add(new IGN());
 
         Commands.add(new restrictedarea());
         Commands.add(new IgnoreCommand());
