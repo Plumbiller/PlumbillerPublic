@@ -1,8 +1,7 @@
 package com.Plumbiller.publicaddon;
 
-import com.Plumbiller.publicaddon.commands.IgnoreCommand;
-import com.Plumbiller.publicaddon.commands.restrictedarea;
-import com.Plumbiller.publicaddon.hud.RestrictedArea;
+import com.Plumbiller.publicaddon.commands.*;
+import com.Plumbiller.publicaddon.hud.*;
 import com.Plumbiller.publicaddon.modules.*;
 import com.Plumbiller.publicaddon.util.*;
 import com.mojang.logging.LogUtils;
@@ -40,6 +39,7 @@ public class Main extends MeteorAddon {
 
         Commands.add(new restrictedarea());
         Commands.add(new IgnoreCommand());
+        Commands.add(new Panorama());
 
         Hud.get().register(RestrictedArea.INFO);
     }
