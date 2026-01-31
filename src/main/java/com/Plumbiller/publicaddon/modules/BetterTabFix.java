@@ -129,12 +129,19 @@ public class BetterTabFix extends Module {
             .defaultValue(false)
             .build());
 
+    public final Setting<SortMode> sortMode = sgGeneral.add(new EnumSetting.Builder<SortMode>()
+            .name("sort")
+            .description("How to sort the tablist.")
+            .defaultValue(SortMode.ByRank)
+            .build());
+
     private final Setting<List<String>> rankHierarchy = sgGeneral.add(new StringListSetting.Builder()
             .name("rank-hierarchy")
             .description("Order of ranks from highest to lowest.")
             .defaultValue(new ArrayList<>(Arrays.asList(
                     "Friends", "OWNER", "Legend", "APEX", "Elite Ultra", "Elite", "Prime Ultra", "Prime", "YouTuber",
                     "TikTok", "Bot")))
+            .visible(() -> sortMode.get() == SortMode.ByRank)
             .onChanged(this::updatePriorities)
             .build());
 
@@ -316,7 +323,7 @@ public class BetterTabFix extends Module {
 
             int priority = 999;
 
-            if (displayName != null) {
+            if (displayName != null && sortMode.get() == SortMode.ByRank) {
                 String cleanName = displayName.trim();
                 Matcher matcher = rankPattern.matcher(cleanName);
                 if (matcher.find()) {
@@ -342,7 +349,7 @@ public class BetterTabFix extends Module {
             }
 
             if (isBot) {
-                if (rankPriority.containsKey("Bot")) {
+                if (rankPriority.containsKey("Bot") && sortMode.get() == SortMode.ByRank) {
                     priority = Math.min(priority, rankPriority.get("Bot"));
                 }
 
@@ -360,7 +367,7 @@ public class BetterTabFix extends Module {
             }
 
             if (Friends.get().get(name) != null) {
-                if (rankPriority.containsKey("Friends")) {
+                if (rankPriority.containsKey("Friends") && sortMode.get() == SortMode.ByRank) {
                     priority = Math.min(priority, rankPriority.get("Friends"));
                 }
             }
@@ -425,6 +432,22 @@ public class BetterTabFix extends Module {
         }
 
         return name;
+    }
+
+    public enum SortMode {
+        ByRank("By rank"),
+        Alphabetically("Alphabetically");
+
+        private final String title;
+
+        SortMode(String title) {
+            this.title = title;
+        }
+
+        @Override
+        public String toString() {
+            return title;
+        }
     }
 
     public enum ScrollMode {
