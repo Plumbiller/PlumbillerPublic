@@ -4,11 +4,12 @@ import com.Plumbiller.publicaddon.Main;
 import meteordevelopment.meteorclient.events.game.ReceiveMessageEvent;
 import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.orbit.EventHandler;
+import net.minecraft.text.Style;
 import net.minecraft.text.Text;
 import net.minecraft.text.TextColor;
 import net.minecraft.util.Formatting;
 
-import java.util.List;
+import java.util.Optional;
 
 public class IGN extends Module {
     public IGN() {
@@ -21,23 +22,22 @@ public class IGN extends Module {
         if (text == null)
             return;
 
-        List<Text> siblings = text.getSiblings();
+        Optional<Boolean> shouldCancel = text.visit((style, asString) -> {
+            if (asString.contains("»")) {
+                TextColor color = style.getColor();
+                TextColor gray = TextColor.fromFormatting(Formatting.GRAY);
 
-        if (siblings.isEmpty())
-            return;
-
-        Text firstPart = siblings.get(0);
-        List<Text> firstPartSiblings = firstPart.getSiblings();
-
-        boolean hasExtraInFirstPart = !firstPartSiblings.isEmpty();
-
-        if (!hasExtraInFirstPart) {
-            TextColor color = firstPart.getStyle().getColor();
-            TextColor gray = TextColor.fromFormatting(Formatting.GRAY);
-
-            if (color != null && color.equals(gray)) {
-                event.cancel();
+                if (color != null && color.equals(gray)) {
+                    return Optional.of(true);
+                } else {
+                    return Optional.of(false);
+                }
             }
+            return Optional.empty();
+        }, Style.EMPTY);
+
+        if (shouldCancel.isPresent() && shouldCancel.get()) {
+            event.cancel();
         }
     }
 }

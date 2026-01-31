@@ -147,7 +147,8 @@ public class BetterTabFix extends Module {
     private final Setting<List<String>> botUsernames = sgGeneral.add(new StringListSetting.Builder()
             .name("bot-usernames")
             .description("List of usernames to be treated as Bots. Use # for single digit, * for any characters.")
-            .defaultValue(new ArrayList<>(Arrays.asList("NotSus####", "Saturn*", "kazwqi", "moooomoooo")))
+            .defaultValue(
+                    new ArrayList<>(Arrays.asList("NotSus####", "Saturn*", "kazwqi", "moooomoooo", "*Bot*", "*bot*")))
             .visible(displayBotRole::get)
             .onChanged(this::updateBotPatterns)
             .build());
