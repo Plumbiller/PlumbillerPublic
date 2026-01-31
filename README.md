@@ -82,8 +82,8 @@ If the auto accept config is enabled and the module detects a trusted player tel
 
 ## Better Tab Fix
 * This module fixes the tab list sorting on 6b6t.
-* It automatically sorts players based on a customizable rank hierarchy (e.g., OWNER > Legend > APEX ...).
-* You can define a custom list of ranks and their order in the module settings.
+* It automatically sorts players based on a customizable rank hierarchy (e.g., OWNER > Legend > APEX ...) or alphabetically.
+* You can define a custom list of ranks and their order in the module settings, and the sorting method is fully configurable.
 
 ## Tab Scroll
 * Allows you to scroll in tab so you are able to see more players.
@@ -99,6 +99,39 @@ If the auto accept config is enabled and the module detects a trusted player tel
 * "Friend" is a distinct rank in the hierarchy, allowing you to place your friends at the top (or anywhere else) in the tab list.
 ### Smart Priority
 * If a player matches multiple roles (e.g., Prime and Friend), the module picks the highest priority role according to your hierarchy settings.
+
+
+## Whisper Logger
+* Logs all your whisper conversations to HTML files that try to mimic how Discord looks like.
+* Logs are saved locally in the `PlumbillerAddon/WhisperLogs` folder.
+* You can customize the message format to match your server's whisper format if you are not playing 6b6t.
+![Whisper Logger](src/main/resources/assets/publicaddon/docs_assets/whisperlogger.png)
+
+## Ignore
+* Ignores all messages from players in `IgnoredPlayers.txt`.
+* Supports wildcards (e.g. `Saturn*`).
+* You can customize the chat and whisper format to match your server's format if you are not playing 6b6t.
+### .ignore command
+**.ignore add (player)**
+This command adds a player or a pattern to the ignore list. It requires 1 argument: the name or pattern to ignore. You can use * as a wildcard to ignore all players with a specific pattern, for example Saturn*.
+
+**.ignore remove (player)**
+This command removes a player or a pattern from the ignore list. It requires 1 argument: the name or pattern to remove.
+
+**.ignore list**
+This command lists all the players and patterns currently in your ignore list.
+
+## IGN (Ignore Gray Names)
+* Simple module that hides messages from players with gray names which sometimes are inferior and don't deserve to be read.
+* Useful for filtering out spam on servers where gray names are common limiters.
+* Keep in mind that even tho chat may look like a ranked chat, they can still read you and send you whispers.
+
+## Panorama
+* Command to take seamless 360 panoramas of your surroundings.
+* Usage: `.panorama <name>`
+* It automatically takes 6 screenshots in all directions and saves them in `PlumbillerAddon/panoramas/<name>`.
+* It doesn't build the resource pack itself bc there are other mods that do that already and I wanted to keep it simple.
+* Credit to 0xTas for the panorama logic.
 
 
 # Dependencies
