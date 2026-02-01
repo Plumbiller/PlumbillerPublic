@@ -126,13 +126,6 @@ This command lists all the players and patterns currently in your ignore list.
 * Useful for filtering out spam on servers where gray names are common limiters.
 * Keep in mind that even tho chat may look like a ranked chat, they can still read you and send you whispers.
 
-## Panorama
-* Command to take seamless 360 panoramas of your surroundings.
-* Usage: `.panorama <name>`
-* It automatically takes 6 screenshots in all directions and saves them in `PlumbillerAddon/panoramas/<name>`.
-* It doesn't build the resource pack itself bc there are other mods that do that already and I wanted to keep it simple.
-* Credit to 0xTas for the panorama logic.
-
 
 # Dependencies
 

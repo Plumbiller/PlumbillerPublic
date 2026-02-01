@@ -39,7 +39,6 @@ public class Main extends MeteorAddon {
 
         Commands.add(new restrictedarea());
         Commands.add(new IgnoreCommand());
-        Commands.add(new Panorama());
 
         Hud.get().register(RestrictedArea.INFO);
     }
